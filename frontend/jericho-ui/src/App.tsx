@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 
 type Screen = 'login' | 'chat'
 
@@ -27,6 +27,15 @@ function App() {
   const [uploadPrivate, setUploadPrivate] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [uploadLoading, setUploadLoading] = useState(false)
+
+  // Auto-scroll anchor
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -278,6 +287,9 @@ function App() {
                   </div>
                 </div>
               )}
+
+              {/* anchor for auto-scroll */}
+              <div ref={messagesEndRef} />
             </div>
           </div>
           <div className="border-t bg-white p-3 flex items-center gap-2">
