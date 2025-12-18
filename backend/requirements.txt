@@ -96,6 +96,9 @@ mypy>=1.11.2
 pylint>=3.3.1
 pdf2image>=1.17.0
 
+passlib[bcrypt]
+PyJWT
+
 
 
 

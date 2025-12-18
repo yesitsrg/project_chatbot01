@@ -6,11 +6,11 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 # 2) Import the REAL logger helpers from core (__init__ re-exports them)
-from core import initlogger, getlogger
+from core import initlogger, get_logger
 
 # Initialize global logger BEFORE importing services
-initlogger()
-logger = getlogger(__name__)
+init_logger()
+logger = get_logger(__name__)
 
 # 3) Now safely import RAGPipeline (which imports services/document_parser)
 from services.rag_pipeline import RAGPipeline

@@ -15,8 +15,10 @@ from fastapi import (
     UploadFile,
     File,
     HTTPException,
+    Depends,
 )
 from pydantic import BaseModel
+from api.deps import get_current_user
 
 from core import get_logger
 from services.rag_pipeline import RAGPipeline
@@ -212,6 +214,7 @@ async def upload_endpoint(
     files: List[UploadFile] = File(...),
     session_id: int = Form(...),
     private: bool = Form(False),
+    user=Depends(get_current_user),  # require auth
 ):
     """
     Upload endpoint used by chat.html.
@@ -225,8 +228,8 @@ async def upload_endpoint(
     """
     try:
         logger.info(
-            f"[upload] session_id={session_id} private={private} files={[f.filename for f in files]}"
-        )
+    f"[upload] user={getattr(user, 'username', '?')} session_id={session_id} private={private} files={[f.filename for f in files]}"
+)
 
         base_dir = Path("data/documents")
         base_dir.mkdir(parents=True, exist_ok=True)
@@ -250,3 +253,57 @@ async def upload_endpoint(
     except Exception as e:
         logger.error(f"[upload] error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Upload/ingest failed")
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from services.rag_pipeline import RAGPipeline
+from core.retrieval import get_hybrid_retriever  # adjust name if needed
+
+
+ragpipeline = RAGPipeline()
+hybridretriever = get_hybrid_retriever()
+
+
+class ReactChatRequest(BaseModel):
+    query: str
+    sessionid: int = 1
+    private: bool = False
+
+
+@router.post("/react-query")
+async def react_query(
+    req: ReactChatRequest,
+    user=Depends(get_current_user),  # keep auth guard
+):
+    """
+    React-facing query endpoint.
+
+    Uses the Orchestrator so queries are routed to the right domain tool:
+    - Transcript, Payroll, BOR, or generic Policy RAG.
+    """
+    try:
+        logger.info(
+            f"[react-query] user={getattr(user, 'username', '?')} q={req.query!r} session={req.sessionid}"
+        )
+
+        # Build orchestrator request
+        orch_request = OrchestratorRequest(query=req.query)
+        orch_response = orchestrator.handle_query(orch_request)
+
+        # OrchestratorResponse fields (from your orchestrator module):
+        # - answer: str
+        # - tools_used: List[str]
+        # - confidence: float
+        # - sources: Optional[...]  (depending on your implementation)
+
+        return {
+            "answer": orch_response.answer,
+            "sessionid": req.sessionid,
+            "tools_used": orch_response.tools_used,
+            "confidence": orch_response.confidence,
+            "sources": orch_response.sources,
+        }
+    except Exception as e:
+        logger.error(f"[react-query] orchestrator error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Query failed")

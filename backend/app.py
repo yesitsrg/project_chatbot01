@@ -29,12 +29,16 @@ init_logger()
 from api.routes import router as api_router
 from api.health import router as health_router
 
+from api.auth_api import router as auth_router
+
 # --- APP ---
 app = FastAPI(
     title="Jericho Chatbot",
     version="1.0.0",
     description="Enterprise multi-domain RAG chatbot for Jericho.",
 )
+
+app.include_router(auth_router, prefix="/apiv1", tags=["auth"])
 
 # --- CORS ---
 app.add_middleware(
