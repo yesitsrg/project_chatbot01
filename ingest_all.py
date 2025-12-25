@@ -23,6 +23,14 @@ def main():
 
     rag = RAGPipeline()
     stats = rag.ingest_documents(paths)
+    print("=== RAW CHUNK DEBUG ===")
+    collection = chroma_client.get_collection("jericho_kb")
+    sample_chunks = collection.get(limit=3, include=["documents"])
+    for i, chunk in enumerate(sample_chunks["documents"]):
+        if "cccscsc" in chunk.lower():
+            print(f"❌ DIRTY CHUNK {i}: {chunk[:200]}...")
+        else:
+            print(f"✅ CLEAN CHUNK {i}: {chunk[:100]}...")
     logger.info(f"INGEST STATS: {stats}")
 
 

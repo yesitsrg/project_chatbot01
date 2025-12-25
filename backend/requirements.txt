@@ -102,6 +102,7 @@ tabula
 easyocr
 langchain_groq
 langchain_experimental
+unidecode
 
 
 

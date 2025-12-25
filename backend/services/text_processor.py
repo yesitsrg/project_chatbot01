@@ -1,8 +1,9 @@
 """
-Smart text chunking with semantic boundaries + metadata preservation.
+Smart text chunking with semantic boundaries + metadata preservation + UNIVERSAL CLEANING.
 
 Hybrid strategy: Fixed-size fallback + semantic splits (paragraphs/sentences).
 Preserves document hierarchy for accurate citations.
+UNIVERSAL OCR CLEANUP applied BEFORE chunking (fixes re-contamination).
 """
 
 import re
@@ -13,10 +14,9 @@ from pathlib import Path
 
 from core import get_logger, ChunkingStrategy, CHUNK_SIZE, CHUNK_OVERLAP, MIN_CHUNK_SIZE
 from config import get_settings
-from services.document_parser import ParsedDocument
+from services.document_parser import DocumentParser, ParsedDocument   # ← NEW: Reuse universal cleaner
 
 logger = get_logger(__name__)
-
 
 @dataclass
 class TextChunk:
@@ -32,9 +32,8 @@ class TextChunk:
     def __post_init__(self):
         self.metadata = self.metadata or {}
 
-
 class TextProcessor:
-    """Enterprise-grade chunking with multiple strategies."""
+    """Enterprise-grade chunking with multiple strategies + UNIVERSAL CLEANING."""
     
     def __init__(self):
         self.settings = get_settings()
@@ -42,6 +41,7 @@ class TextProcessor:
         self.chunk_overlap = self.settings.chunk_overlap or CHUNK_OVERLAP
         self.min_chunk_size = MIN_CHUNK_SIZE
         self.strategy = ChunkingStrategy.HYBRID
+        self.parser = DocumentParser()  # ← NEW: Reuse universal OCR cleaner
         logger.info(f"TextProcessor ready: {self.strategy.value} chunks={self.chunk_size}")
 
     def process_document(self, parsed_doc: ParsedDocument) -> List[TextChunk]:
@@ -58,24 +58,35 @@ class TextProcessor:
             logger.warning(f"No content to chunk: {parsed_doc.filename}")
             return []
 
-        chunks = self._chunk_content(parsed_doc)
+        # CRITICAL LAYER 2 CLEANING: TextProcessor MUST clean AGAIN
+        cleaned_content = []
+        original_count = len(parsed_doc.content)
+        for i, block in enumerate(parsed_doc.content):
+            clean_block = self.parser._universal_ocr_cleanup(block)
+            if clean_block and len(clean_block) > 30:  # Enterprise quality gate
+                cleaned_content.append(clean_block)
+        
+        logger.info(f"TextProcessor cleaned {original_count} --> {len(cleaned_content)} blocks ({parsed_doc.filename})")
+        
+        # Chunk ONLY clean content
+        chunks = self._chunk_content(parsed_doc, cleaned_content)
         logger.info(f" Chunked {parsed_doc.filename}: {len(chunks)} chunks")
         return chunks
 
-    def _chunk_content(self, parsed_doc: ParsedDocument) -> List[TextChunk]:
-        """Apply hybrid chunking strategy."""
+    def _chunk_content(self, parsed_doc: ParsedDocument, content: List[str]) -> List[TextChunk]:
+        """Apply hybrid chunking strategy to ALREADY-CLEANED content."""
         if self.strategy == ChunkingStrategy.SEMANTIC:
-            return self._semantic_chunking(parsed_doc)
+            return self._semantic_chunking(parsed_doc, content)
         elif self.strategy == ChunkingStrategy.FIXED_SIZE:
-            return self._fixed_size_chunking(parsed_doc)
+            return self._fixed_size_chunking(parsed_doc, content)
         else:
             # HYBRID: Semantic first, fixed-size fallback
-            semantic_chunks = self._semantic_chunking(parsed_doc)
+            semantic_chunks = self._semantic_chunking(parsed_doc, content)
             if len(semantic_chunks) > 0 and all(len(c.content) >= self.min_chunk_size for c in semantic_chunks):
                 return semantic_chunks
-            return self._fixed_size_chunking(parsed_doc)
+            return self._fixed_size_chunking(parsed_doc, content)
 
-    def _semantic_chunking(self, parsed_doc: ParsedDocument) -> List[TextChunk]:
+    def _semantic_chunking(self, parsed_doc: ParsedDocument, content: List[str]) -> List[TextChunk]:
         """Chunk on semantic boundaries (paragraphs → sentences)."""
         chunks = []
         current_chunk = ""
@@ -84,7 +95,7 @@ class TextProcessor:
         # Semantic separators (per spec)
         separators = r'\n\n|\n|\.\s+|\?\s+|\!\s+'
         
-        for i, block in enumerate(parsed_doc.content):
+        for i, block in enumerate(content):  # ← FIXED: Use cleaned content
             page_num = parsed_doc.pages[i] if parsed_doc.pages and i < len(parsed_doc.pages) else None
             
             # Try semantic split first
@@ -98,8 +109,8 @@ class TextProcessor:
                 if len(current_chunk) + len(sentence) > self.chunk_size:
                     # Chunk full → save
                     if len(current_chunk) >= self.min_chunk_size:
-                        chunks.append(self._create_chunk(current_chunk, len(chunks), len(parsed_doc.content), 
-                                                       parsed_doc, current_page))
+                        chunks.append(self._create_chunk(current_chunk, len(chunks), len(content), 
+                                                        parsed_doc, current_page))
                     # Start new chunk with overlap
                     current_chunk = current_chunk[-self.chunk_overlap:] + " " + sentence
                 else:
@@ -109,15 +120,15 @@ class TextProcessor:
         
         # Final chunk
         if len(current_chunk) >= self.min_chunk_size:
-            chunks.append(self._create_chunk(current_chunk, len(chunks), len(parsed_doc.content), 
-                                           parsed_doc, current_page))
+            chunks.append(self._create_chunk(current_chunk, len(chunks), len(content), 
+                                            parsed_doc, current_page))
         
         return chunks
 
-    def _fixed_size_chunking(self, parsed_doc: ParsedDocument) -> List[TextChunk]:
+    def _fixed_size_chunking(self, parsed_doc: ParsedDocument, content: List[str]) -> List[TextChunk]:
         """Fixed-size chunking with overlap (fallback)."""
         chunks = []
-        full_text = " ".join(parsed_doc.content)
+        full_text = " ".join(content)  # ← FIXED: Use cleaned content
         
         for i in range(0, len(full_text), self.chunk_size - self.chunk_overlap):
             chunk_text = full_text[i:i + self.chunk_size]
@@ -125,7 +136,7 @@ class TextProcessor:
                 # Estimate page from character position
                 page_estimate = self._estimate_page(i, parsed_doc)
                 chunks.append(self._create_chunk(chunk_text.strip(), len(chunks), 
-                                               len(full_text) // self.chunk_size, parsed_doc, page_estimate))
+                                                len(content), parsed_doc, page_estimate))
         
         return chunks
 

@@ -1,40 +1,64 @@
-# live_check.py - uses EXACT app initialization
-from app import app  # Your app.py imports everything correctly
-from core import init_logger, get_logger
-from services.rag_pipeline import RAGPipeline
-from core.retrieval import get_hybrid_retriever
-
+"""
+SINGLE FILE INGEST - ONLY Residence Hall for fast testing
+"""
+from core import init_logger
 init_logger()
+
+"""
+SINGLE FILE INGEST - ONLY Residence Hall (NO rag_pipeline dependency)
+"""
+
+import sys
+sys.path.append(".")
+
+from pathlib import Path
+import json
+from services.document_parser import DocumentParser
+from services.text_processor import TextProcessor
+from db.chromadb_manager import ChromaDBManager
+from core.embeddings import EmbeddingPipeline
+from core import get_logger
+
 logger = get_logger(__name__)
 
-print("🔍 LIVE RAG PIPELINE (same as your app)...")
+PDF_PATH = Path("D:/jericho/data/documents/hr_policies/FINAL-Rev2024-DC RES LIFE HANDBOOK (7).pdf")
 
-try:
-    # Exact same as your routes.py
-    rag_pipeline = RAGPipeline()
-    retriever = get_hybrid_retriever()
+def ingest_single_file():
+    """Process ONLY Residence Hall - Full pipeline"""
     
-    print("✅ RAGPipeline loaded (same as app)")
-    print("✅ HybridRetriever ready")
+    if not PDF_PATH.exists():
+        print(f"❌ File not found: {PDF_PATH}")
+        return
     
-    # Test retrieval (BM25 + vector)
-    print("\n=== RESIDENCE HALL SEARCH ===")
-    results = retriever.retrieve("residence hall check in", top_k=5)
+    print(f"🎯 SINGLE FILE: {PDF_PATH.name}")
+    print("🚀 Starting targeted ingest...")
     
-    print(f"Retrieved {len(results)} chunks:")
-    filenames = []
-    for i, doc in enumerate(results):
-        filename = doc.metadata.get('filename', 'unknown') if doc.metadata else 'no metadata'
-        filenames.append(filename)
-        print(f"  {i+1}. {filename:<60} | score: {doc.score}")
+    # Force re-process
+    PDF_PATH.touch()
     
-    print(f"\nUnique files: {len(set(filenames))}")
-    print("Files found:", ', '.join(set(filenames)))
+    # 1. Parse
+    print("📄 STEP 1: DocumentParser...")
+    parser = DocumentParser()
+    parsed_doc = parser.parse_file(PDF_PATH)
+    print(f"   Parsed: {len(parsed_doc.content)} blocks")
     
-    residence_found = any('res life' in f.lower() or 'residence' in f.lower() for f in filenames)
-    print(f"✅ Residence hall doc: {'YES' if residence_found else 'NO'}")
+    # 2. Chunk
+    print("🔪 STEP 2: TextProcessor...")
+    processor = TextProcessor()
+    chunks = processor.process_document(parsed_doc)
+    print(f"   Chunked: {len(chunks)} chunks")
     
-except Exception as e:
-    print(f"❌ Error: {e}")
-    import traceback
-    traceback.print_exc()
+    # 3. Embed + Store (skip if testing only)
+    print("💾 STEP 3: ChromaDB (skipped for speed)")
+    print(f"\n✅ SUCCESS: {len(chunks)} clean chunks ready!")
+    print("🎯 Start server + test query NOW")
+    
+    # Save chunks for inspection
+    with open("residence_hall_clean_chunks.txt", "w", encoding="utf-8") as f:
+        for i, chunk in enumerate(chunks[:10]):  # First 10
+            f.write(f"CHUNK {i}: {len(chunk.content)} chars\n")
+            f.write(chunk.content[:200] + "\n\n")
+    print("💾 Saved: residence_hall_clean_chunks.txt")
+
+if __name__ == "__main__":
+    ingest_single_file()

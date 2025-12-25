@@ -45,12 +45,23 @@ class HybridRetriever:
             logger.warning(f"BM25 failed: {e}")
             self.bm25_index = None
 
-    def retrieve(self, query: str, top_k: int = 5, filters: Optional[Dict[str, Any]] = None) -> List[RetrievalResult]:
-        vector_results = self._vector_search(query, min(20, top_k * 4), filters)
-        bm25_results = self._bm25_search(query, min(20, top_k * 4)) if self.bm25_index else []
+    def retrieve(self, query: str, top_k: int = 10, filters: Optional[Dict[str, Any]] = None) -> List[RetrievalResult]:
+        """
+        Retrieve with higher default + better over-fetching.
+        """
+        # Over-fetch MORE for better final quality
+        fetch_k = max(30, top_k * 3)  # 30-90 chunks
+        
+        vector_results = self._vector_search(query, fetch_k, filters)
+        bm25_results = self._bm25_search(query, fetch_k) if self.bm25_index else []
+        
         fused_results = self._reciprocal_rank_fusion(vector_results, bm25_results)
-        final_results = self._rerank(query, fused_results, top_k)
+        final_results = self._rerank(query, fused_results, top_k)  # Respect top_k param
+        
+        logger.info(f"[Retriever] query='{query[:50]}...' --> {len(vector_results)} vector + {len(bm25_results)} bm25 → {len(final_results)} final")
+        
         return final_results
+
 
     def _vector_search(self, query: str, top_k: int, filters: Optional[Dict[str, Any]]) -> List[RetrievalResult]:
         results = self.db.query(query, top_k=top_k, filters=filters or {})
