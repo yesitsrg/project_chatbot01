@@ -159,28 +159,33 @@ class RAGPipeline:
 
     def _generate_answer(self, context: str, question: str) -> str:
         """Enhanced prompting for accuracy."""
-        prompt = f"""CONTEXT (use ONLY this information):
-{context}
+        prompt = f"""You are an assistant answering questions strictly based on the provided context.
 
-QUESTION: {question}
+    CONTEXT:
+    {context}
 
-INSTRUCTIONS:
-- Answer using ONLY context above
-- For dates/numbers/tables: Quote EXACT values
-- If context insufficient: "I don't have that information"
-- No hallucination/guessing"""
-        
+    QUESTION:
+    {question}
+
+    INSTRUCTIONS:
+    - Answer using ONLY the context above.
+    - For dates, numbers, and tables: quote EXACT values from the context.
+    - If the context truly does not contain enough information to answer, respond with:
+    "The documents do not contain information about this question."
+    - Do NOT invent facts or guess beyond the context.
+    """
+
         # Multi-provider with temp=0.1 for facts
         providers = []
         if self.settings.llm_provider == "groq" and self.settings.groq_api_key:
             providers.append(self._call_groq)
         elif self.settings.llm_provider == "ollama":
             providers.append(self._call_ollama)
-        
+
         if os.getenv("GROQ_API_KEY"):
             providers.append(self._call_groq)
         providers.append(self._call_ollama)
-        
+
         for provider in providers:
             try:
                 return provider(prompt).strip()
@@ -257,7 +262,7 @@ INSTRUCTIONS:
             tables = self.table_agent.extract_tables(results)
             
             if tables:
-                logger.info(f"✅ Table Agent: Found {len(tables)} tables")
+                logger.info(f"Table Agent: Found {len(tables)} tables")
                 
                 # Build rich table context
                 table_context = []

@@ -34,6 +34,7 @@ from api.health import router as health_router
 
 from api.auth_api import router as auth_router
 
+
 # --- APP ---
 app = FastAPI(
     title="Jericho Chatbot",

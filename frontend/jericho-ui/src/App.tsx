@@ -8,6 +8,7 @@ type ChatMessage = {
   content: string
   sources?: any[]
   confidence?: number
+  feedback?: 'like' | 'dislike' | null
 }
 
 type SessionInfo = {
@@ -15,7 +16,16 @@ type SessionInfo = {
   session_name: string
 }
 
+type DomainTemplate = {
+  id: string
+  name: string
+  icon: string
+  prompt: string
+  description: string
+}
+
 function App() {
+  // ========== LOGIN STATE ==========
   const [screen, setScreen] = useState<Screen>('login')
   const [username, setUsername] = useState<string>('')
   const [password, setPassword] = useState<string>('')
@@ -23,17 +33,27 @@ function App() {
   const [loginError, setLoginError] = useState<string | null>(null)
   const [loginLoading, setLoginLoading] = useState(false)
 
+  // ========== CHAT STATE ==========
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [nextId, setNextId] = useState(1)
 
-  // Sessions
+  // ========== SESSIONS ==========
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null)
   const [sessionsLoading, setSessionsLoading] = useState(false)
 
-  // Rename/delete UI
+  // ========== UX ENHANCEMENTS STATE ==========
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [recognition, setRecognition] = useState<any>(null)
+  const [feedbackStates, setFeedbackStates] = useState<
+    Record<number, 'like' | 'dislike' | null>
+  >({})
+
+  // ========== SESSION RENAME/DELETE ==========
   const [sessionMenuOpenId, setSessionMenuOpenId] = useState<number | null>(
     null
   )
@@ -41,14 +61,14 @@ function App() {
   const [renameSessionId, setRenameSessionId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
-  // Upload state
+  // ========== UPLOAD ==========
   const [showUpload, setShowUpload] = useState(false)
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null)
   const [uploadPrivate, setUploadPrivate] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [uploadLoading, setUploadLoading] = useState(false)
 
-  // Admin console state
+  // ========== ADMIN ==========
   const [adminView, setAdminView] = useState<'chat' | 'admin'>('chat')
   const [adminStats, setAdminStats] = useState<any | null>(null)
   const [adminStatsLoading, setAdminStatsLoading] = useState(false)
@@ -56,15 +76,87 @@ function App() {
   const [adminTestResponse, setAdminTestResponse] = useState<any | null>(null)
   const [adminTestLoading, setAdminTestLoading] = useState(false)
 
-  // Auto-scroll anchor
+  // ========== REFS ==========
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // ========== DOMAIN TEMPLATES ==========
+  const DOMAIN_TEMPLATES: DomainTemplate[] = [
+    {
+      id: 'transcript',
+      name: '🎓 Student Transcripts',
+      icon: '📊',
+      prompt: "What's my GPA?",
+      description: 'GPA, courses, progress',
+    },
+    {
+      id: 'payroll',
+      name: '💰 Payroll Calendar',
+      icon: '💵',
+      prompt: "When's my next paycheck?",
+      description: 'Pay dates, periods',
+    },
+    {
+      id: 'bor',
+      name: '📅 Board Meetings',
+      icon: '📋',
+      prompt: 'Next Board of Regents meeting?',
+      description: 'BOR schedule, dates',
+    },
+    {
+      id: 'policy',
+      name: '📚 Policies & Handbook',
+      icon: '📖',
+      prompt: 'What are the sick leave policies?',
+      description: 'HR policies, rules',
+    },
+  ]
+
+  // ========== VOICE RECOGNITION SETUP ==========
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition
+      const recog = new SpeechRecognition()
+      recog.continuous = false
+      recog.interimResults = true
+      recog.lang = 'en-US'
+
+      recog.onstart = () => setIsListening(true)
+      recog.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join('')
+        setInput(transcript)
+      }
+      recog.onend = () => setIsListening(false)
+
+      setRecognition(recog)
+    }
+  }, [])
+
+  // ========== AUTO-SCROLL ==========
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages])
 
-  // ---------- LOGIN ----------
+  // ========== LOAD SESSIONS ON SCREEN CHANGE ==========
+  useEffect(() => {
+    if (screen === 'chat') {
+      loadSessions()
+    }
+  }, [screen])
+
+  // ========== LOAD ADMIN STATS ==========
+  useEffect(() => {
+    if (screen === 'chat' && role === 'admin' && adminView === 'admin') {
+      loadAdminStats()
+    }
+  }, [screen, role, adminView])
+
+  // ========== FUNCTIONS ==========
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,22 +187,6 @@ function App() {
     }
   }
 
-  // Once we are on chat, load sessions
-  useEffect(() => {
-    if (screen === 'chat') {
-      loadSessions()
-    }
-  }, [screen])
-
-  // Load admin stats when switching into admin view
-  useEffect(() => {
-    if (screen === 'chat' && role === 'admin' && adminView === 'admin') {
-      loadAdminStats()
-    }
-  }, [screen, role, adminView])
-
-  // ---------- SESSIONS + HISTORY ----------
-
   const loadSessions = async () => {
     setSessionsLoading(true)
     try {
@@ -118,16 +194,23 @@ function App() {
         method: 'GET',
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
-      const list: SessionInfo[] = data.sessions || []
+      const raw = data.sessions || []
+
+      // Map with proper field name handling (both underscore and no-underscore variants)
+      const list: SessionInfo[] = raw.map((s: any) => ({
+        session_id: s.session_id ?? s.sessionid, // Try .session_id first, fallback to .sessionid
+        session_name:
+          s.session_name ??
+          s.sessionname ??
+          `Chat ${s.session_id ?? s.sessionid}`,
+      }))
       setSessions(list)
 
       if (list.length > 0) {
         const last = list[list.length - 1]
-        setCurrentSessionId(last.session_id)
+        setCurrentSessionId(last.session_id) // Now this is guaranteed a number
         await loadHistory(last.session_id)
       } else {
         await handleNewChat()
@@ -148,26 +231,21 @@ function App() {
           credentials: 'include',
         }
       )
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
       const history = data.history || []
       const mapped: ChatMessage[] = []
       let idCounter = 1
       for (const item of history) {
         if (item.question) {
-          mapped.push({
-            id: idCounter++,
-            role: 'user',
-            content: item.question,
-          })
+          mapped.push({ id: idCounter++, role: 'user', content: item.question })
         }
         if (item.answer) {
           mapped.push({
             id: idCounter++,
             role: 'assistant',
             content: item.answer,
+            feedback: null,
           })
         }
       }
@@ -181,36 +259,42 @@ function App() {
   }
 
   const handleNewChat = async () => {
+    setShowTemplates(true)
     try {
       const resp = await fetch('http://localhost:8000/new_session', {
         method: 'POST',
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
-      const sessionId: number = data.session_id
+      const sessionId: number = data.session_id ?? data.sessionid // Add fallback just in case
+
+      console.log('[handleNewChat] Created session:', sessionId) // DEBUG
+
+      if (!sessionId) {
+        console.error('[handleNewChat] No sessionId returned!', data) // DEBUG
+        return
+      }
+
       const newSession: SessionInfo = {
         session_id: sessionId,
         session_name: 'New Chat',
       }
       setSessions((prev) => [...prev, newSession])
-      setCurrentSessionId(sessionId)
+      setCurrentSessionId(sessionId) // This should now be a real number
       setMessages([])
       setNextId(1)
     } catch (err) {
-      console.error(err)
+      console.error('[handleNewChat] Error:', err)
     }
   }
 
   const handleSelectSession = async (sessionId: number) => {
     if (sessionId === currentSessionId) return
     setCurrentSessionId(sessionId)
+    setShowTemplates(false)
     await loadHistory(sessionId)
   }
-
-  // ---------- SESSION RENAME / DELETE ----------
 
   const openRenameModal = (session: SessionInfo) => {
     setRenameSessionId(session.session_id)
@@ -232,9 +316,7 @@ function App() {
         body: form,
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       setSessions((prev) =>
         prev.map((s) =>
           s.session_id === renameSessionId ? { ...s, session_name: name } : s
@@ -256,9 +338,7 @@ function App() {
         body: form,
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
 
       setSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
       setSessionMenuOpenId(null)
@@ -281,12 +361,11 @@ function App() {
     }
   }
 
-  // ---------- CHAT SEND USING /react-query (with sources) ----------
-
   const handleSend = async () => {
     const q = input.trim()
     if (!q || !currentSessionId) return
     setInput('')
+    setShowTemplates(false)
 
     const userMessage: ChatMessage = {
       id: nextId,
@@ -308,9 +387,7 @@ function App() {
         }),
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
       const assistantMessage: ChatMessage = {
         id: nextId + 1,
@@ -319,6 +396,7 @@ function App() {
         sources: data.sources || [],
         confidence:
           typeof data.confidence === 'number' ? data.confidence : undefined,
+        feedback: null,
       }
       setNextId(nextId + 2)
       setMessages((prev) => [...prev, assistantMessage])
@@ -336,7 +414,46 @@ function App() {
     }
   }
 
-  // ---------- UPLOAD USING /upload ----------
+  const toggleVoice = () => {
+    if (isListening && recognition) {
+      recognition.stop()
+    } else if (recognition) {
+      recognition.start()
+    }
+  }
+
+  const submitFeedback = async (
+    messageId: number,
+    rating: 'like' | 'dislike'
+  ) => {
+    if (!currentSessionId) return
+
+    try {
+      const form = new FormData()
+      form.append('message_id', String(messageId))
+      form.append('rating', rating)
+      form.append('session_id', String(currentSessionId))
+
+      await fetch('http://localhost:8000/feedback', {
+        // Correct endpoint
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+      })
+    } catch (err) {
+      console.error('Feedback failed:', err)
+    }
+
+    setFeedbackStates((prev) => ({
+      ...prev,
+      [messageId]: rating,
+    }))
+  }
+
+  const useTemplate = (template: DomainTemplate) => {
+    setInput(template.prompt)
+    setShowTemplates(false)
+  }
 
   const handleUpload = async () => {
     if (!uploadFiles || uploadFiles.length === 0) {
@@ -362,9 +479,7 @@ function App() {
         body: form,
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
       const msg =
         data.message ||
@@ -378,8 +493,6 @@ function App() {
     }
   }
 
-  // ---------- ADMIN STATS + TEST QUERY ----------
-
   const loadAdminStats = async () => {
     setAdminStatsLoading(true)
     try {
@@ -387,9 +500,7 @@ function App() {
         method: 'GET',
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
       setAdminStats(data)
     } catch (err) {
@@ -416,9 +527,7 @@ function App() {
         }),
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
       setAdminTestResponse(data)
     } catch (err) {
@@ -428,8 +537,6 @@ function App() {
       setAdminTestLoading(false)
     }
   }
-
-  // ---------- LOGOUT ----------
 
   const handleLogout = async () => {
     try {
@@ -449,11 +556,10 @@ function App() {
     setScreen('login')
   }
 
-  // ---------- RENDER ----------
-
+  // ========== LOGIN SCREEN ==========
   if (screen === 'login') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-900">
         <div className="absolute top-6 left-6 flex items-center gap-3">
           <img
             src="https://www.dinecollege.edu/wp-content/uploads/2024/12/dc_logoFooter.png"
@@ -462,39 +568,42 @@ function App() {
           />
         </div>
 
-        <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl p-8 w-full max-w-md text-white">
-          <h1 className="text-2xl font-semibold mb-2">
-            Diné College Assistant
-          </h1>
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-8 w-full max-w-md text-white">
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold mb-1">Diné College</h1>
+            <p className="text-sm text-amber-300 font-semibold">
+              Powered by Jericho
+            </p>
+          </div>
 
           {loginError && (
-            <div className="mb-4 text-sm text-red-300 bg-red-900/40 border border-red-400/60 rounded px-3 py-2">
+            <div className="mb-4 text-sm text-red-200 bg-red-900/40 border border-red-400/60 rounded px-3 py-2">
               {loginError}
             </div>
           )}
 
           <form className="space-y-4" onSubmit={handleLogin}>
             <div>
-              <label className="block text-sm mb-1">Username</label>
+              <label className="block text-sm mb-2 font-medium">Username</label>
               <input
                 type="text"
-                className="w-full rounded-md border border-slate-500 bg-slate-900/60 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full rounded-lg border border-slate-400/30 bg-slate-900/60 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-sm mb-1">Password</label>
+              <label className="block text-sm mb-2 font-medium">Password</label>
               <input
                 type="password"
-                className="w-full rounded-md border border-slate-500 bg-slate-900/60 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full rounded-lg border border-slate-400/30 bg-slate-900/60 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
             <button
               type="submit"
-              className="w-full mt-2 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold py-2 text-sm transition disabled:opacity-60"
+              className="w-full mt-4 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-900 font-bold py-2.5 text-sm transition disabled:opacity-60"
               disabled={loginLoading}
             >
               {loginLoading ? 'Signing in...' : 'Login'}
@@ -505,28 +614,44 @@ function App() {
     )
   }
 
+  // ========== CHAT SCREEN ==========
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100">
-      <header className="h-14 px-4 flex items-center justify-between bg-white border-b">
-        <div className="flex items-center gap-3">
-          <img
-            src="https://www.dinecollege.edu/wp-content/uploads/2024/12/dc_logoFooter.png"
-            alt="Diné College"
-            className="h-8 rounded-md object-contain"
-          />
-          <span className="font-semibold text-slate-800">
-            Diné College Assistant (Jericho)
-          </span>
-        </div>
-        <div className="flex items-center gap-3 text-sm text-slate-600">
-          <span>{username || 'User'}</span>
-          {role === 'admin' && (
-            <span className="px-2 py-0.5 rounded-full bg-slate-900 text-amber-300 text-xs">
-              Admin
-            </span>
-          )}
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* HEADER */}
+      <header className="h-16 px-6 flex items-center justify-between bg-white border-b border-slate-200 shadow-sm">
+        <div className="flex items-center gap-4">
           <button
-            className="text-xs px-3 py-1 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100"
+            className="p-2 hover:bg-slate-100 rounded-lg transition lg:hidden"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            <span className="text-2xl">≡</span>
+          </button>
+          <div className="flex items-center gap-3">
+            <img
+              src="https://www.dinecollege.edu/wp-content/uploads/2024/12/dc_logoFooter.png"
+              alt="Diné College"
+              className="h-8 rounded-md object-contain"
+            />
+            <div>
+              <h1 className="font-bold text-slate-900">Diné College</h1>
+              <p className="text-xs text-amber-600 font-semibold">
+                Powered by Jericho
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 text-sm">
+          <div className="text-right hidden sm:block">
+            <p className="font-semibold text-slate-800">
+              Welcome, {username || 'User'}!
+            </p>
+            <p className="text-xs text-slate-500">
+              {role === 'admin' ? '👑 Admin' : 'User'}
+            </p>
+          </div>
+          <button
+            className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-medium transition"
             onClick={handleLogout}
           >
             Logout
@@ -534,59 +659,63 @@ function App() {
         </div>
       </header>
 
-      <main className="flex-1 flex">
-        <aside className="w-64 border-r bg-white p-3 flex flex-col">
+      <main className="flex-1 flex overflow-hidden">
+        {/* SIDEBAR */}
+        <aside
+          className={`fixed lg:relative w-64 h-[calc(100vh-4rem)] bg-white border-r border-slate-200 p-4 flex flex-col overflow-y-auto z-40 transition-transform lg:translate-x-0 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
           <button
-            className="w-full mb-3 rounded-md bg-amber-500 hover:bg-amber-400 text-sm font-semibold py-2 text-slate-900 disabled:opacity-60"
+            className="w-full mb-4 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-900 font-bold py-2.5 text-sm transition shadow-md"
             onClick={handleNewChat}
             disabled={sessionsLoading}
           >
-            New chat
+            ✨ New Chat
           </button>
-
-          <div className="text-xs text-slate-500 px-1 mb-2 flex items-center justify-between">
-            <span>Chats</span>
-            {sessionsLoading && <span className="text-[10px]">Loading…</span>}
-          </div>
 
           {role === 'admin' && (
             <button
-              className={`w-full mb-3 mt-1 rounded-md text-sm font-semibold py-2 ${
+              className={`w-full mb-4 rounded-lg text-sm font-semibold py-2 transition ${
                 adminView === 'admin'
-                  ? 'bg-slate-900 text-amber-200'
-                  : 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                  ? 'bg-slate-900 text-amber-300'
+                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
               }`}
               onClick={() =>
                 setAdminView(adminView === 'admin' ? 'chat' : 'admin')
               }
             >
-              {adminView === 'admin' ? 'Back to chat' : 'Admin console'}
+              {adminView === 'admin' ? '← Back to Chat' : '⚙️ Admin Console'}
             </button>
           )}
 
-          <div className="flex-1 overflow-auto text-sm">
+          <div className="text-xs text-slate-500 px-1 mb-3 font-semibold">
+            CONVERSATION HISTORY
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-2">
             {sessions.length === 0 && !sessionsLoading && (
-              <div className="text-xs text-slate-400 px-1">
-                No sessions yet. Click “New chat”.
+              <div className="text-xs text-slate-400 px-2 py-4 text-center">
+                No chats yet. Click "New Chat" to start!
               </div>
             )}
             {sessions.map((s) => (
               <div
                 key={s.session_id}
-                className={`flex items-center mb-1 rounded-md ${
+                className={`flex items-center rounded-lg overflow-hidden transition ${
                   s.session_id === currentSessionId
-                    ? 'bg-slate-900 text-amber-200'
-                    : 'bg-slate-100 text-slate-700'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-slate-900'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 <button
-                  className="flex-1 text-left px-2 py-1.5 truncate hover:bg-slate-800/10"
+                  className="flex-1 text-left px-3 py-2 text-sm truncate"
                   onClick={() => handleSelectSession(s.session_id)}
                 >
-                  {s.session_name || `Session ${s.session_id}`}
+                  {s.session_name || `Chat ${s.session_id}`}
                 </button>
                 <button
-                  className="px-2 text-xs hover:bg-slate-800/20 rounded-r-md"
+                  className="px-2 text-xs hover:opacity-70 transition"
                   onClick={() =>
                     setSessionMenuOpenId(
                       sessionMenuOpenId === s.session_id ? null : s.session_id
@@ -596,18 +725,18 @@ function App() {
                   ⋮
                 </button>
                 {sessionMenuOpenId === s.session_id && (
-                  <div className="absolute ml-40 mt-10 z-50 bg-white border border-slate-200 rounded-md shadow-md text-xs text-slate-700">
+                  <div className="absolute mt-8 bg-white border border-slate-200 rounded-lg shadow-lg z-50 text-xs text-slate-700 w-32">
                     <button
-                      className="block w-full px-3 py-1 hover:bg-slate-100 text-left"
+                      className="block w-full px-3 py-2 hover:bg-slate-100 text-left"
                       onClick={() => openRenameModal(s)}
                     >
-                      Rename
+                      ✏️ Rename
                     </button>
                     <button
-                      className="block w-full px-3 py-1 hover:bg-red-50 text-left text-red-600"
+                      className="block w-full px-3 py-2 hover:bg-red-50 text-left text-red-600"
                       onClick={() => handleDeleteSession(s.session_id)}
                     >
-                      Delete
+                      🗑️ Delete
                     </button>
                   </div>
                 )}
@@ -616,16 +745,52 @@ function App() {
           </div>
         </aside>
 
-        <section className="flex-1 flex flex-col">
+        {/* MAIN CONTENT */}
+        <section className="flex-1 flex flex-col overflow-hidden">
           {adminView === 'chat' || role !== 'admin' ? (
             <>
-              {/* Chat view */}
-              <div className="flex-1 p-4 overflow-auto bg-slate-50">
-                <div className="max-w-3xl mx-auto space-y-3">
-                  {messages.length === 0 && (
-                    <div className="text-slate-500 text-sm">
-                      Start a conversation by asking a question about Diné
-                      College.
+              {/* CHAT MESSAGES */}
+              <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-slate-50 to-slate-100">
+                <div className="max-w-3xl mx-auto space-y-4">
+                  {messages.length === 0 && !showTemplates && (
+                    <div className="text-center py-12">
+                      <p className="text-slate-500 mb-4">
+                        Start a conversation about Diné College
+                      </p>
+                      <button
+                        className="text-amber-600 hover:text-amber-700 text-sm font-semibold"
+                        onClick={() => setShowTemplates(true)}
+                      >
+                        Browse Templates →
+                      </button>
+                    </div>
+                  )}
+
+                  {/* TEMPLATES MODAL */}
+                  {showTemplates && messages.length === 0 && (
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6 mb-6">
+                      <h3 className="font-bold text-slate-900 mb-4">
+                        🎯 Quick Start Templates
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {DOMAIN_TEMPLATES.map((tmpl) => (
+                          <button
+                            key={tmpl.id}
+                            className="p-4 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50 text-left transition"
+                            onClick={() => useTemplate(tmpl)}
+                          >
+                            <div className="font-semibold text-slate-900 text-sm mb-1">
+                              {tmpl.name}
+                            </div>
+                            <div className="text-xs text-slate-600">
+                              {tmpl.description}
+                            </div>
+                            <div className="text-xs text-amber-600 mt-2 italic">
+                              "{tmpl.prompt}"
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -637,50 +802,88 @@ function App() {
                       }`}
                     >
                       <div
-                        className={`max-w-xl px-4 py-2 rounded-lg text-sm whitespace-pre-wrap shadow-sm ${
+                        className={`max-w-2xl rounded-xl px-5 py-4 text-sm whitespace-pre-wrap shadow-md ${
                           m.role === 'user'
-                            ? 'bg-amber-500 text-slate-900'
-                            : 'bg-white text-slate-800'
+                            ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-slate-900 font-medium'
+                            : 'bg-white text-slate-800 border border-slate-200'
                         }`}
                       >
                         {m.content}
-                        {m.role === 'assistant' &&
-                          m.sources &&
-                          m.sources.length > 0 && (
-                            <div className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-600">
-                              <div className="font-semibold mb-1">Sources</div>
-                              <ul className="list-disc pl-4 space-y-1">
-                                {m.sources
-                                  .slice(0, 4)
-                                  .map((s: any, idx: number) => (
-                                    <li key={idx}>
-                                      {s.filename || s.title || 'Source'}{' '}
-                                      {s.page && <span>(p. {s.page})</span>}
-                                    </li>
-                                  ))}
-                              </ul>
-                              {typeof m.confidence === 'number' && (
-                                <div className="mt-1 text-[11px] text-slate-500">
-                                  Confidence: {Math.round(m.confidence * 100)}%
-                                </div>
-                              )}
+
+                        {m.role === 'assistant' && (
+                          <>
+                            {/* FEEDBACK BUTTONS */}
+                            <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
+                              <span className="text-xs text-slate-500">
+                                Was this helpful?
+                              </span>
+                              <button
+                                className={`px-2 py-1 rounded text-xs transition ${
+                                  feedbackStates[m.id] === 'like'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                                onClick={() => submitFeedback(m.id, 'like')}
+                              >
+                                👍 Like
+                              </button>
+                              <button
+                                className={`px-2 py-1 rounded text-xs transition ${
+                                  feedbackStates[m.id] === 'dislike'
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                }`}
+                                onClick={() => submitFeedback(m.id, 'dislike')}
+                              >
+                                👎 Dislike
+                              </button>
                             </div>
-                          )}
+
+                            {/* SOURCES & CONFIDENCE */}
+                            {m.sources && m.sources.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <div className="text-xs font-semibold text-slate-600 mb-2">
+                                  📎 Sources
+                                </div>
+                                <ul className="text-xs text-slate-600 space-y-1">
+                                  {m.sources
+                                    .slice(0, 4)
+                                    .map((s: any, idx: number) => (
+                                      <li key={idx}>
+                                        • {s.filename || s.title || 'Source'}{' '}
+                                        {s.page && `(p. ${s.page})`}
+                                      </li>
+                                    ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {typeof m.confidence === 'number' && (
+                              <div className="mt-2 text-xs text-slate-500">
+                                ⭐ Confidence: {Math.round(m.confidence * 100)}%
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
 
                   {loading && (
                     <div className="flex justify-start">
-                      <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-white text-xs text-slate-600 shadow-sm">
-                        <div className="flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-bounce"></span>
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-300 animate-[bounce_1s_infinite_200ms]"></span>
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-200 animate-[bounce_1s_infinite_400ms]"></span>
+                      <div className="inline-flex items-center gap-2 px-5 py-4 rounded-xl bg-white text-xs text-slate-600 shadow-md border border-slate-200">
+                        <div className="flex gap-1">
+                          <span className="h-2 w-2 rounded-full bg-amber-400 animate-bounce"></span>
+                          <span
+                            className="h-2 w-2 rounded-full bg-amber-400 animate-bounce"
+                            style={{ animationDelay: '0.2s' }}
+                          ></span>
+                          <span
+                            className="h-2 w-2 rounded-full bg-amber-400 animate-bounce"
+                            style={{ animationDelay: '0.4s' }}
+                          ></span>
                         </div>
-                        <span className="font-medium">
-                          Jericho is generating an answer...
-                        </span>
+                        <span>Jericho is thinking...</span>
                       </div>
                     </div>
                   )}
@@ -689,80 +892,99 @@ function App() {
                 </div>
               </div>
 
-              <div className="border-t bg-white p-3 flex items-center gap-2">
-                <button
-                  className="rounded-md border border-slate-300 text-sm px-3 py-2 text-slate-700 hover:bg-slate-100"
-                  onClick={() => {
-                    setShowUpload(true)
-                    setUploadFiles(null)
-                    setUploadStatus(null)
-                  }}
-                  disabled={!currentSessionId}
-                >
-                  Upload
-                </button>
-                <textarea
-                  className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  rows={1}
-                  placeholder={
-                    currentSessionId
-                      ? 'Ask a question about Diné College…'
-                      : 'Waiting for session…'
-                  }
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      if (!loading) handleSend()
+              {/* INPUT AREA */}
+              <div className="border-t border-slate-200 bg-white p-4 shadow-lg">
+                <div className="max-w-3xl mx-auto flex items-end gap-3">
+                  {/* UPLOAD BUTTON */}
+                  <button
+                    className="p-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition disabled:opacity-50"
+                    onClick={() => {
+                      setShowUpload(true)
+                      setUploadFiles(null)
+                      setUploadStatus(null)
+                    }}
+                    disabled={!currentSessionId}
+                    title="Upload documents"
+                  >
+                    📎
+                  </button>
+
+                  {/* VOICE BUTTON */}
+                  <button
+                    className={`p-3 rounded-lg transition disabled:opacity-50 ${
+                      isListening
+                        ? 'bg-red-500 text-white'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                    }`}
+                    onClick={toggleVoice}
+                    disabled={!currentSessionId}
+                    title={isListening ? 'Stop listening' : 'Start voice input'}
+                  >
+                    🎤
+                  </button>
+
+                  {/* TEXT INPUT */}
+                  <textarea
+                    className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent resize-none"
+                    rows={1}
+                    placeholder={
+                      currentSessionId
+                        ? 'Ask about transcripts, payroll, board meetings, or policies...'
+                        : 'Waiting for session...'
                     }
-                  }}
-                  disabled={!currentSessionId}
-                />
-                <button
-                  className="rounded-md bg-amber-500 hover:bg-amber-400 text-sm font-semibold px-4 py-2 text-slate-900 disabled:opacity-60"
-                  disabled={loading || !input.trim() || !currentSessionId}
-                  onClick={handleSend}
-                >
-                  {loading ? 'Sending...' : 'Send'}
-                </button>
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        if (!loading && input.trim()) handleSend()
+                      }
+                    }}
+                    disabled={!currentSessionId}
+                  />
+
+                  {/* SEND BUTTON */}
+                  <button
+                    className="p-3 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-900 font-bold transition disabled:opacity-50"
+                    disabled={loading || !input.trim() || !currentSessionId}
+                    onClick={handleSend}
+                    title="Send message"
+                  >
+                    {loading ? '⏳' : '➤'}
+                  </button>
+                </div>
               </div>
             </>
           ) : (
             // ADMIN VIEW
-            <div className="flex-1 p-4 overflow-auto bg-slate-50">
-              <div className="max-w-4xl mx-auto space-y-4">
-                <h2 className="text-lg font-semibold text-slate-800">
-                  Admin console
+            <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-slate-50 to-slate-100">
+              <div className="max-w-4xl mx-auto space-y-6">
+                <h2 className="text-2xl font-bold text-slate-900">
+                  ⚙️ Admin Console
                 </h2>
 
-                {/* Stats card */}
-                <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-slate-800">
-                      RAG / documents stats
+                {/* STATS */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-md p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      📊 RAG Statistics
                     </h3>
                     <button
-                      className="text-xs px-2 py-1 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-100"
+                      className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition"
                       onClick={loadAdminStats}
                       disabled={adminStatsLoading}
                     >
-                      {adminStatsLoading ? 'Refreshing...' : 'Refresh'}
+                      {adminStatsLoading ? '⏳ Refreshing...' : '🔄 Refresh'}
                     </button>
                   </div>
-                  {adminStatsLoading && (
-                    <div className="text-xs text-slate-500">
-                      Loading stats...
-                    </div>
-                  )}
-                  {!adminStatsLoading && adminStats && (
-                    <div className="text-sm text-slate-700">
+                  {adminStats && (
+                    <div className="text-sm text-slate-700 space-y-2">
                       <div>
-                        <span className="font-medium">Total documents: </span>
+                        <span className="font-semibold">Total Documents:</span>{' '}
                         {adminStats.documents?.total ?? 'N/A'}
                       </div>
                       {adminStats.documents?.by_type && (
-                        <ul className="mt-1 text-xs text-slate-600 list-disc pl-4">
+                        <ul className="text-xs text-slate-600 space-y-1 ml-4">
                           {Object.entries(
                             adminStats.documents.by_type as Record<
                               string,
@@ -770,47 +992,42 @@ function App() {
                             >
                           ).map(([ext, count]) => (
                             <li key={ext}>
-                              {ext}: {count}
+                              • {ext}: {count}
                             </li>
                           ))}
                         </ul>
                       )}
                     </div>
                   )}
-                  {!adminStatsLoading && !adminStats && (
-                    <div className="text-xs text-slate-500">
-                      No stats available or failed to load.
-                    </div>
-                  )}
                 </div>
 
-                {/* Test query card */}
-                <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
-                  <h3 className="text-sm font-semibold text-slate-800 mb-2">
-                    Orchestrator test query
+                {/* TEST QUERY */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-md p-6">
+                  <h3 className="text-lg font-semibold text-slate-900 mb-3">
+                    🧪 Test Orchestrator
                   </h3>
-                  <p className="text-xs text-slate-500 mb-2">
-                    Send a test question and inspect tools_used, confidence, and
-                    sources.
+                  <p className="text-xs text-slate-600 mb-4">
+                    Send test queries and inspect tools, sources, and
+                    confidence.
                   </p>
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex gap-2 mb-4">
                     <input
                       type="text"
-                      className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                      placeholder="E.g. What is the check date for Pay period 3"
+                      className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      placeholder="E.g. What is the check date for Pay period 3?"
                       value={adminTestQuery}
                       onChange={(e) => setAdminTestQuery(e.target.value)}
                     />
                     <button
-                      className="rounded-md bg-amber-500 hover:bg-amber-400 text-xs font-semibold px-3 py-2 text-slate-900 disabled:opacity-60"
+                      className="px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-sm transition disabled:opacity-50"
                       disabled={adminTestLoading || !adminTestQuery.trim()}
                       onClick={handleAdminTestQuery}
                     >
-                      {adminTestLoading ? 'Running...' : 'Run'}
+                      {adminTestLoading ? '⏳' : 'Run'}
                     </button>
                   </div>
                   {adminTestResponse && (
-                    <pre className="mt-2 text-xs bg-slate-900 text-emerald-100 rounded-md p-3 overflow-auto max-h-64">
+                    <pre className="mt-4 text-xs bg-slate-900 text-emerald-100 rounded-lg p-4 overflow-auto max-h-72 font-mono">
                       {JSON.stringify(adminTestResponse, null, 2)}
                     </pre>
                   )}
@@ -821,80 +1038,93 @@ function App() {
         </section>
       </main>
 
-      {/* Upload modal */}
+      {/* UPLOAD MODAL */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-            <h2 className="text-lg font-semibold mb-3">Upload documents</h2>
-            <p className="text-xs text-slate-500 mb-3">
-              Files will be parsed by Jericho and added to the knowledge base.
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 mx-4">
+            <h2 className="text-xl font-bold mb-2 text-slate-900">
+              📤 Upload Documents
+            </h2>
+            <p className="text-xs text-slate-600 mb-4">
+              Files will be parsed by Jericho and added to your knowledge base.
             </p>
-            <div className="space-y-3">
-              <div>
+
+            <div className="space-y-4">
+              <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 hover:border-amber-400 transition">
                 <input
                   type="file"
                   multiple
-                  className="block w-full text-sm text-slate-700"
+                  className="block w-full text-sm"
                   onChange={(e) => setUploadFiles(e.target.files)}
                 />
               </div>
-              <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+
+              <label className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition cursor-pointer">
                 <input
                   type="checkbox"
                   className="rounded border-slate-300"
                   checked={uploadPrivate}
                   onChange={(e) => setUploadPrivate(e.target.checked)}
                 />
-                <span>Private upload (visible only to you)</span>
+                <div>
+                  <div className="text-sm font-medium text-slate-900">
+                    Private Upload
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    Only visible in this session, not shared
+                  </div>
+                </div>
               </label>
+
               {uploadStatus && (
-                <div className="text-xs text-slate-600 bg-slate-100 rounded px-3 py-2">
+                <div className="text-xs text-slate-700 bg-slate-100 rounded-lg px-4 py-3">
                   {uploadStatus}
                 </div>
               )}
             </div>
-            <div className="mt-5 flex justify-end gap-2">
+
+            <div className="mt-6 flex justify-end gap-3">
               <button
-                className="px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100"
-                onClick={() => {
-                  setShowUpload(false)
-                }}
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-sm font-medium transition"
+                onClick={() => setShowUpload(false)}
                 disabled={uploadLoading}
               >
-                Close
+                Cancel
               </button>
               <button
-                className="px-4 py-2 text-sm rounded-md bg-amber-500 text-slate-900 font-semibold hover:bg-amber-400 disabled:opacity-60"
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-400 text-slate-900 font-bold text-sm transition disabled:opacity-50"
                 onClick={handleUpload}
                 disabled={uploadLoading}
               >
-                {uploadLoading ? 'Uploading...' : 'Upload'}
+                {uploadLoading ? '⏳ Uploading...' : '✓ Upload'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Rename modal */}
+      {/* RENAME MODAL */}
       {showRenameModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-5">
-            <h2 className="text-base font-semibold mb-3">Rename chat</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 mx-4">
+            <h2 className="text-lg font-bold mb-4 text-slate-900">
+              ✏️ Rename Chat
+            </h2>
             <input
               type="text"
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-amber-400"
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-3">
               <button
-                className="px-3 py-1.5 text-xs rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100"
+                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-sm font-medium transition"
                 onClick={() => setShowRenameModal(false)}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-1.5 text-xs rounded-md bg-amber-500 text-slate-900 font-semibold hover:bg-amber-400"
+                className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-sm transition"
                 onClick={handleRenameSubmit}
               >
                 Save

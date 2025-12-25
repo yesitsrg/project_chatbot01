@@ -1,0 +1,476 @@
+/* Hide the Streamlit header bar completely */
+header {
+    visibility: hidden !important;
+    height: 0px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Reset the main content area to start from the top and reduce padding */
+.main .block-container {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+    max-width: 1000px !important;
+}
+
+/* Hide hamburger menu and footer */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+
+/* Hide deploy button */
+.st-emotion-cache-1avcm0n {
+    display: none !important;
+}
+button[title="Deploy"] {
+    display: none !important;
+}
+
+/* Now properly position our logo without interference */
+.top-left-logo {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    height: auto;
+    width: 80px;
+    z-index: 9999;
+}
+.top-left-logo img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Style for the main header container - REPOSITIONED TO TOP */
+.jericho-header {
+    text-align: center;
+    position: relative;
+    top: -90px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px;
+    z-index: 100;
+    width: 500px;
+    margin-bottom: -150px;
+}
+
+/* New style for Jericho logo container */
+.jericho-logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+/* Style for the Jericho logo image */
+.jericho-logo img {
+    max-width: 250px;
+    height: auto;
+    margin: 0 auto;
+}
+
+.jericho-header p.tagline {
+    font-size: 16px;
+    color: gray;
+    margin: 0;
+    padding: 0;
+}
+
+.jericho-header p.timestamp {
+    font-size: 12px;
+    color: #888;
+    margin: 0;
+    padding: 0;
+}
+
+/* Input container styles - moved up by adding custom positioning */
+.input-container {
+    position: fixed;
+    top: 130px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 800px;
+    width: 90%;
+    z-index: 99;
+    margin-bottom: 0px;
+}
+
+/* Hide the "Press Enter to apply" text */
+.stTextInput div[data-baseweb="input-container"] + div {
+    display: none !important;
+}
+
+/* Input styles */
+div[data-baseweb="input"] > div {
+    border: 1px solid #ccc !important;
+    border-radius: 6px !important;
+    background-color: white !important;
+    box-shadow: none !important;
+}
+
+/* Button style */
+.stButton > button {
+    background-color: #7792E3 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+}
+
+/* Make sure inputs and buttons line up properly */
+.stTextInput, .stButton {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* Adjust spacing below the input area for answers */
+.answers-container {
+    margin-top: 0;
+    padding-top: 10px;
+    position: relative;
+    z-index: 10;
+}
+
+/* New styles for the latest answer container */
+.latest-answer-container {
+    background-color: #f0f0f0;
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    position: relative;
+}
+
+/* Larger font for the answer heading */
+.answer-heading {
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    margin-bottom: 15px !important;
+    color: #333 !important;
+}
+
+/* Regular answer text */
+.answer-content {
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+}
+
+.answer-separator {
+    margin-top: 10px;
+    margin-bottom: 15px;
+    border-top: 1px solid #eee;
+}
+
+/* Center empty space */
+.container-centerize {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+/* Previous Q&A section styling */
+.previous-qa-heading {
+    font-size: 22px;
+    font-weight: 600;
+    margin-top: 30px;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.previous-qa-item {
+    margin-bottom: 20px;
+}
+
+/* fixed position container for language selector */
+.language-selector {
+    position: fixed;
+    top: 10px;
+    right: 30px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+}
+
+/* Globe icon styling */
+.globe-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 5px;
+    position: fixed !important;
+    top: 20px !important;
+    right: 155px !important;
+    z-index: 10000 !important;
+}
+
+/* Dropdown container */
+.dropdown-container {
+    width: 120px;
+}
+
+/* Target and position the selectbox over our placeholder */
+div[data-testid="stSelectbox"] {
+    position: fixed !important;
+    top: 10px !important;
+    right: 30px !important;
+    width: 120px !important;
+    margin-top: 0 !important;
+    z-index: 9999 !important;
+}
+
+/* Hide the label */
+div[data-testid="stSelectbox"] > label {
+    display: none !important;
+}
+
+/* Multiple selectors to target the logout button - try all possible combinations */
+.stButton[data-testid="logout_btn"] {
+    position: fixed !important;
+    top: 12px !important;
+    right: 185px !important;
+    z-index: 10001 !important;
+    width: auto !important;
+}
+
+/* Alternative selectors for logout button */
+button[data-testid="logout_btn"] {
+    position: fixed !important;
+    top: 12px !important;
+    right: 185px !important;
+    z-index: 10001 !important;
+    width: auto !important;
+}
+
+/* Target button with "Logout" text */
+.stButton > button:contains("Logout") {
+    position: fixed !important;
+    top: 12px !important;
+    right: 185px !important;
+    z-index: 10001 !important;
+    width: auto !important;
+}
+
+/* Generic logout button targeting */
+button[title="Logout"],
+button[aria-label="Logout"],
+.logout-btn,
+#logout_btn,
+*[class*="logout"] {
+    position: fixed !important;
+    top: 12px !important;
+    right: 185px !important;
+    z-index: 10001 !important;
+    width: auto !important;
+}
+
+/* 📂 File Uploader Styling */
+section[data-testid="stSidebar"] .stFileUploader {
+    margin-bottom: 15px !important;
+    width: 100% !important;
+}
+
+section[data-testid="stSidebar"] .stFileUploader > div:first-child,
+section[data-testid="stSidebar"] .stFileUploader div[role="button"] {
+    border: 2px dashed #4A90E2 !important;
+    border-radius: 10px !important;
+    padding: 20px 10px !important;
+    background-color: rgba(74, 144, 226, 0.07) !important;
+    text-align: center !important;
+    min-height: 140px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+section[data-testid="stSidebar"] .stFileUploader div[role="button"]:hover {
+    border-color: #357ABD !important;
+    background-color: rgba(74, 144, 226, 0.12) !important;
+}
+
+section[data-testid="stSidebar"] .stFileUploader small,
+section[data-testid="stSidebar"] .stFileUploader span {
+    color: #CCCCCC !important;
+    font-size: 11px !important;
+    display: block !important;
+    text-align: center !important;
+    margin: 3px 0 !important;
+    line-height: 1.4 !important;
+}
+
+/* Browse Button Styling */
+section[data-testid="stSidebar"] .stFileUploader button {
+    background-color: #4A90E2 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 8px 16px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+}
+
+section[data-testid="stSidebar"] .stFileUploader button:hover {
+    background-color: #357ABD !important;
+}
+
+/* Private Checkbox Styling */
+section[data-testid="stSidebar"] .stCheckbox {
+    margin-top: 10px !important;
+    margin-bottom: 5px !important;
+    padding-left: 3px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+/* Override Streamlit's default block-container to allow custom positioning */
+.block-container {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+    max-width: 1000px !important;
+    position: relative !important;
+    background-color: #1e1e1e !important;
+}
+
+/* Fixed header for logo, header, and input section */
+.fixed-header {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    z-index: 1000 !important;
+    background-color: #1e1e1e !important;
+    padding: 20px 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    border-bottom: 1px solid #333 !important;
+    height: 150px !important; /* Ensure enough space for logo and header */
+}
+
+/* Ensure logo is visible and positioned correctly */
+.top-left-logo {
+    position: absolute !important;
+    top: 10px !important;
+    left: 20px !important;
+    height: auto !important;
+    width: 100px !important; /* Slightly larger for visibility */
+    z-index: 1001 !important;
+}
+.top-left-logo img {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+}
+
+/* Adjust header positioning within fixed header */
+.jericho-header {
+    text-align: center !important;
+    position: relative !important;
+    top: 40px !important; /* Adjusted to avoid overlap with logo */
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    padding: 10px !important;
+    z-index: 1000 !important;
+    width: 500px !important;
+    margin-bottom: 10px !important;
+}
+
+/* Adjust input container to fit within fixed header */
+.input-container {
+    position: absolute !important;
+    top: 2000px !important; /* Position below header */
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    max-width: 800px !important;
+    width: 90% !important;
+    z-index: 999 !important;
+    margin-bottom: 0 !important;
+    padding-top: 10px !important;
+}
+
+/* Ensure input elements are visible */
+.stTextInput, .stButton {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    width: 100% !important;
+}
+.stTextInput input {
+    width: 100% !important;
+    padding: 10px !important;
+    border-radius: 5px !important;
+}
+.stButton > button {
+    padding: 10px 20px !important;
+    border-radius: 5px !important;
+}
+
+/* Scrollable content area for answers and history */
+.scrollable-content {
+    position: relative !important;
+    top: 180px !important; /* Adjusted for header and input height */
+    max-height: calc(100vh - 180px) !important;
+    overflow-y: auto !important;
+    padding: 20px !important;
+    margin-bottom: 20px !important;
+    background-color: #f0f0f0 !important;
+    border-radius: 10px !important;
+}
+
+/* Restore sidebar collapse functionality */
+.stSidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+    z-index: 999 !important;
+    background-color: #2a2a2a !important;
+    transition: all 0.3s ease !important;
+}
+.stSidebar [data-testid="collapsedControl"] {
+    display: block !important; /* Ensure collapse button is visible */
+    position: absolute !important;
+    top: 10px !important;
+    left: 100% !important;
+    z-index: 1002 !important;
+    background-color: #2a2a2a !important;
+    border: none !important;
+    padding: 5px !important;
+}
+.stSidebar [data-testid="collapsedControl"] svg {
+    fill: #ffffff !important; /* White arrow for visibility */
+}
+
+/* Enhance visual appeal */
+.latest-answer-container {
+    background-color: #ffffff !important;
+    border-radius: 15px !important;
+    padding: 20px !important;
+    margin-bottom: 20px !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
+}
+
+.answer-heading {
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    color: #2c3e50 !important;
+    margin-bottom: 15px !important;
+}
+
+.answer-content {
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+    color: #34495e !important;
+}
+
+.previous-qa-heading {
+    font-size: 22px !important;
+    font-weight: 600 !important;
+    color: #2c3e50 !important;
+    margin-bottom: 15px !important;
+}
+
+.previous-qa-item {
+    margin-bottom: 20px !important;
+    padding: 15px !important;
+    background-color: #ffffff !important;
+    border-radius: 10px !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05) !important;
+}

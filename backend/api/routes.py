@@ -37,7 +37,7 @@ rag_pipeline = RAGPipeline()
 hybrid_retriever = get_hybrid_retriever()
 
 # Global singleton orchestrator
-orchestrator = Orchestrator()
+orchestrator = Orchestrator(rag_pipeline=rag_pipeline)
 
 # ---------- SIMPLE RAG API (TEST / DEBUG) ----------
 
