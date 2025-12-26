@@ -54,7 +54,7 @@ def answer(question: str, params: Dict[str, Any] = None) -> ToolResult:
     logger.info(f"[Retriever] returned {len(all_results)} raw chunks")
 
     # Smart deduplication (diversity + quality)
-    results = smart_dedup(all_results)
+    results = smart_dedup(all_results, max_per_doc=2, max_total=8)
     filenames = [r.metadata.get("filename", "unknown") for r in results]
     logger.info(f"[GenericRagTool] SMART DEDUP --> {len(results)} chunks: {filenames}")
 

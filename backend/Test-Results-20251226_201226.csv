@@ -1,0 +1,77 @@
+﻿domain,question,Generated Answer,Sources,Confidence,Tools Used,Status,Error,Timestamp
+TRANSCRIPT,Give me the GPA details of Trista Barrett.,The GPA of Trista Barrett is 4.0.,N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:12:39
+TRANSCRIPT,Tell me the courses which Joshua Don Gaitan has enrolled?,"Courses: Introduction to Biology, College Writing I, Elementary Statistics, Varsity Powerlifting, Intro to Criminal Justice (Online), Formation, First-Year Experience, Topics in Film:Gothic (Online), Yoga, Art and the Human Experience, World Literature (Online), History of World Civilization II, Principles of Nutrition (Online), Lifetime Fitness & Wellness-Mind/, Biblical Literature, Canoe Camping",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:14:01
+PAYROLL_CALENDAR,When is the check date for payroll period between 01/03/2026 to 01/16/2026?,No payroll period found between N/A and N/A in the payroll calendar.,N/A,0.4,PayrollTool,SUCCESS,,2025-12-26 20:14:18
+PAYROLL_CALENDAR,What is the payroll period where check date is 2/6/2026?,The payroll period where the check date is 2/6/2026 is from 1/17/2026 to 1/30/2026.,N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:14:54
+PAYROLL_CALENDAR,How many payroll periods do we have in 2026?,There are 26 payroll periods in 2026.,N/A,0.9,PayrollTool,SUCCESS,,2025-12-26 20:15:06
+BOR_PLANNER,When is the next Board of Regents meeting?,"The Board normally meets on the second Friday of every month at the Tsaile Campus, on the 6th Floor of the Ned Hatathlie Center.",N/A,0.95,GenericRagTool,SUCCESS,,2025-12-26 20:15:28
+BOR_PLANNER,Give me the BOR meeting schedule for this year.,LLM unavailable,N/A,0.85,BorPlannerTool,SUCCESS,,2025-12-26 20:15:53
+BOR_PLANNER,When is the Finance/Audit/Investment Committee meeting?,There is no information about the Finance/Audit/Investment Committee meeting in the provided data.,N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:16:51
+GENERIC RAG,What is the sick leave policy for full-time staff?,Regular full-time employees are eligible to accrue sick leave hours from the date of employment. Eligible employees will accrue 4 hours of sick leave per pay period from the date of employment. The maximum sick leave hours which may be accrued shall be 320 hours for administrators and staff. An employee will accrue sick leave when eighty (80) hours of compensation are paid for a pay period.,N/A,0.95,GenericRagTool,SUCCESS,,2025-12-26 20:17:11
+GENERIC_RAG,What are the health benefit plan options available to employees?,LLM unavailable,N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:17:37
+GENERIC_RAG,What is the student code of conduct at Diné College?,The purpose of Dine College's Student Code of Conduct (hereinafter SCC) is to focus on students' conduct and behavior while enrolled in college. The SCC applies to all officially enrolled Dine College students and visiting students from other institutions who are conducting college business on or off campus.,N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:17:57
+GENERIC_RAG,What is the policy on travel and purchase approvals?,"Travelers are not to make commitments to travel or to incur travel expenses without first obtaining the appropriate approvals. The provisions of this Travel Policy are applicable to official travel for the performance of business on behalf of Dine College by the following: 
+
+A. All permanent and temporary employees (full time, or contract personnel)
+B. President, Provost, and Vice President(s)
+
+Authorization of an uncustomary transportation method (e.g charter airplane) will require the President's or Vice President's approval and a showing of cost feasibility. The President shall sign Travel Authorizations for the Board of Regents President.",N/A,0.95,GenericRagTool,SUCCESS,,2025-12-26 20:18:18
+GENERIC_RAG,What are the housing rules in the Residence Life Handbook?,Unable to process query. Please ensure LangChain is installed for advanced queries.,N/A,0.0,TranscriptTool,SUCCESS,,2025-12-26 20:18:30
+GENERIC_RAG,What is the mission and vision of Diné College?,"The mission of Diné College is to advance quality post-secondary student learning and development to ensure the well-being of the Dine People. 
+
+The vision of Diné College is to continuously improve its programs and services to make Diné College the exemplary higher education institution for the Dine People.",N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:18:51
+TRANSCRIPT,List student by their GPA,"**Top 5 Students by GPA:**
+
+1. Arnoldo Bernal Cavazos: GPA 4.00
+2. Blen Tadesse Bezuwork: GPA 4.00
+3. Joshua Don Gaitan: GPA 4.00
+4. Trista Denay Barrett: GPA 4.00
+5. Christian Haras Buchanan: GPA 3.00
+",N/A,0.9,TranscriptTool,SUCCESS,,2025-12-26 20:19:26
+TRANSCRIPT,Student details with highest GPA,"**Top 5 Students by GPA:**
+
+1. Arnoldo Bernal Cavazos: GPA 4.00
+2. Blen Tadesse Bezuwork: GPA 4.00
+3. Joshua Don Gaitan: GPA 4.00
+4. Trista Denay Barrett: GPA 4.00
+5. Christian Haras Buchanan: GPA 3.00
+",N/A,0.9,TranscriptTool,SUCCESS,,2025-12-26 20:20:05
+TRANSCRIPT,What is the GAP for Leslie Bright,"Since the GPA for Leslie Bright is 0.0, it means that Leslie Bright does not have any grades in the dataset.",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:21:00
+TRANSCRIPT,Display student by their GPA in Tabular format,"Courses: Art Appreciation, Business Mathematics, Health, Safety & Nutrition, Child and Family Development, Guidance of Young Children",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:21:51
+TRANSCRIPT,Student name with Highest GPA,"Courses: Art Appreciation, Business Mathematics, Health, Safety & Nutrition, Child and Family Development, Guidance of Young Children",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:22:51
+TRANSCRIPT,What is the GPA for Trista Denay Barrett in the term 2024-2025 Fall,The GPA for Trista Denay Barrett in the term 2024-2025 Fall is 4.0.,N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:23:49
+TRANSCRIPT,How many courses has Trista Barrett taken in 2024-2025 Fall Term,Courses: 7,N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:25:13
+TRANSCRIPT,Hours attended by Trista Denay Barrett in 2024-2025 Spring term,The hours attended by Trista Denay Barrett in the 2024-2025 Spring term is 106.,N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:26:37
+TRANSCRIPT,What is the Average GPA of students for Fall 2024-2025 term,LLM unavailable,N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:27:02
+TRANSCRIPT,List all students who have enrolled for the course Business Mathematics,Courses: Business Mathematics,N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:27:39
+GENERIC_RAG,Can you list 2024-2025 ACADEMIC CALENDAR,LLM unavailable,N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:28:05
+BOR_PLANNER,When are the regular BOR meetings scheduled,LLM unavailable,N/A,0.85,BorPlannerTool,SUCCESS,,2025-12-26 20:28:29
+BOR_PLANNER,When are the Board reports due,"Reports are due the Wednesday prior to each BOR meeting: Nov 12, 2025; Jan 07, 2026; Mar 11, 2026; May 06, 2026; Jul 08, 2026; Sep 09, 2026.",N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:28:50
+BOR_PLANNER,List all the events for Board of regetns,LLM unavailable,N/A,0.85,BorPlannerTool,SUCCESS,,2025-12-26 20:29:15
+BOR_PLANNER,ASSOCIATION REPORTING SCHEDULE in board of Regents planner,LLM unavailable,N/A,0.85,BorPlannerTool,SUCCESS,,2025-12-26 20:29:38
+GENERIC_RAG,Early Move-In/Extended Stay policy,Unable to process query. Please ensure LangChain is installed for advanced queries.,N/A,0.0,TranscriptTool,SUCCESS,,2025-12-26 20:29:51
+GENERIC_RAG,Residence Halls Security Deposit,Unable to process query. Please ensure LangChain is installed for advanced queries.,N/A,0.0,TranscriptTool,SUCCESS,,2025-12-26 20:30:13
+GENERIC_RAG,Background Check.,There are 6 unique students in the data.,N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:31:07
+GENERIC_RAG,Residence Halls Application Procedures,Unable to process query. Please ensure LangChain is installed for advanced queries.,N/A,0.0,TranscriptTool,SUCCESS,,2025-12-26 20:31:36
+GENERIC_RAG,NON-DISCRIMINATION	POLICY,LLM unavailable,N/A,0.95,GenericRagTool,SUCCESS,,2025-12-26 20:32:00
+GENERIC_RAG,SEARCH AND SEIZURE POLICY,"The Search and Seizure Policy is outlined in the Student Code of Conduct, specifically under the section ""SEARCH AND SEIZURE POLICY.""
+
+The College personnel reserves the right to enter a student's room for the purpose of inspecting the premises when one or more of the following situations exist:
+
+* An occupant of the room is physically harmed or endangered
+* Alcohol and/or other substances are suspected
+* College property is being damaged
+* The welfare, health, and safety of others are at risk
+* Maintenance and/or repairs of the facilities are necessary",N/A,0.75,GenericRagTool,SUCCESS,,2025-12-26 20:32:20
+GENERIC_RAG,The Jeanne Clery Act,"The Jeanne Clery Act requires institutions to report certain crimes on or near campus. The CR Type column in the dataset likely represents the type of crime or incident reported. With 12 unique CR Types, the institution is required to report at least 4 types of crimes: 
+
+1. Murder/Non-Negligent Manslaughter
+2. Sex Offenses (Forcible)
+3. Sex Offenses (Non-Forcible)
+4. Robbery",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:33:01
+GENERIC_RAG,Sex Offenders,Unable to process query. Please ensure LangChain is installed for advanced queries.,N/A,0.0,TranscriptTool,SUCCESS,,2025-12-26 20:33:31
+GENERIC_RAG,Dine College guidelines of conduct and behavior while on or off campus,"Unfortunately, the provided data does not contain any information about Dine College's guidelines of conduct and behavior while on or off campus. The 'Advisor(s)' column is empty for Dine College.",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:34:26
+GENERIC_RAG,Rights to Notice of Disciplinary Charges,"Courses: Art Appreciation, Business Mathematics, Health, Safety & Nutrition, Child and Family Development, Guidance of Young Children, Language & Physical Skills, English Composition 1, English Composition 2, American Fereral Government, US Hist Since Civil War Era, Physical Science, Exploring Business, Speech Communication, Principles of Macroeconomics, Elementary Statistics, Formation, First-Year Experience, Computer Applications (Online), Anatomy and Physiology, Personal Finance, Varsity Softball, General Psychology",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:35:22
+GENERIC_RAG,Right to have Present,"Courses: Art Appreciation, Business Mathematics, Health, Safety & Nutrition, Child and Family Development, Guidance of Young Children, Language & Physical Skills, English Composition 1, English Composition 2, American Fereral Government, US Hist Since Civil War Era, Physical Science, Exploring Business, Speech Communication, Principles of Macroeconomics, Elementary Statistics, Formation, First-Year Experience, Computer Applications (Online), Anatomy and Physiology, Personal Finance, Varsity Softball, General Psychology",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:36:24
+GENERIC_RAG,Rights to Search and Seizure,Students have the right to have their personal property secured against unwarranted search and seizure.,N/A,0.95,GenericRagTool,SUCCESS,,2025-12-26 20:36:51
+GENERIC_RAG,Filing an Incident Report Form,"Courses: Art Appreciation, Business Mathematics, Health, Safety & Nutrition, Child and Family Development, Guidance of Young Children, Language & Physical Skills, English Composition 1, English Composition 2, American Fereral Government, US Hist Since Civil War Era, Physical Science, Exploring Business, Speech Communication, Principles of Macroeconomics, Elementary Statistics, Formation, First-Year Experience, Computer Applications (Online), Anatomy and Physiology, Personal Finance, Varsity Softball, General Psychology",N/A,0.88,TranscriptTool,SUCCESS,,2025-12-26 20:37:40

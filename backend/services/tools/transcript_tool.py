@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-TRANSCRIPT TOOL - Universal CSV Agent with Dynamic Context
-Production-ready solution for ALL transcript queries.
+TRANSCRIPT TOOL - Universal CSV Agent with Dynamic Context + Smart Course Filtering
+Production-ready solution for ALL transcript queries with intelligent data quality handling.
 Location: backend/services/tools/transcript_tool.py
 """
 
 import os
 import logging
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import pandas as pd
 
 from models.schemas import ToolResult
@@ -123,174 +123,209 @@ def preprocess_query(query: str, df_columns: list) -> Dict[str, Any]:
 
 
 # ============================================================================
+# SMART COURSE FILTERING (NEW - Handles Bad Data)
+# ============================================================================
+
+def _filter_courses_with_llm(raw_courses: list, student_name: str, llm) -> list:
+    """
+    Use LLM to intelligently filter course list and remove junk data (dates, empty values).
+    
+    Args:
+        raw_courses: Raw list from Course Title + Course Number columns
+        student_name: Student name for context
+        llm: LLM instance for filtering
+    
+    Returns:
+        List of clean, valid course names/titles/codes
+    """
+    if not raw_courses or len(raw_courses) == 0:
+        return []
+    
+    # Quick heuristic filter first (cheap)
+    candidates = []
+    for course in raw_courses:
+        course_str = str(course).strip()
+        
+        # Skip obvious junk
+        if not course_str or course_str == ' ':
+            continue
+        if len(course_str) < 3:  # Too short
+            continue
+        if re.match(r'^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$', course_str):  # Date pattern
+            continue
+        
+        candidates.append(course_str)
+    
+    # If empty after filtering, return empty
+    if not candidates:
+        logger.warning(f"[CourseFilter] No valid courses found for {student_name}")
+        return []
+    
+    # If <= 3 candidates and they look reasonable, skip LLM (optimization)
+    if len(candidates) <= 3 and all(len(c) > 8 for c in candidates):
+        logger.info(f"[CourseFilter] {len(candidates)} courses look valid, skipping LLM")
+        return candidates
+    
+    # Use LLM for intelligent filtering
+    logger.info(f"[CourseFilter] Sending {len(candidates)} candidates to LLM for filtering")
+    
+    filter_prompt = f"""
+You are a data quality filter for student course records.
+
+Student: {student_name}
+
+Raw course data (may contain course titles, course codes, dates, or junk):
+{candidates}
+
+Task: Return ONLY the items that are actual courses (course titles, course names, or course codes).
+
+Rules:
+- Include: Course titles (e.g., "Introduction to Biology", "Business Mathematics")
+- Include: Course codes (e.g., "MATH 101", "ENG-1010", "CS101")
+- Exclude: Dates (e.g., "12/16/2024", "12-11-2024")
+- Exclude: Empty strings or whitespace
+- Exclude: Random numbers or gibberish
+
+Output format: Return a Python list of valid courses ONLY.
+Example: ["Introduction to Biology", "Business Mathematics", "MATH 101"]
+
+If no valid courses found, return empty list: []
+
+Respond with ONLY the Python list, nothing else.
+"""
+    
+    try:
+        from langchain_core.messages import HumanMessage
+        
+        response = llm.invoke([HumanMessage(content=filter_prompt)])
+        response_text = response.content.strip()
+        
+        # Try to parse as Python list
+        import ast
+        try:
+            filtered_courses = ast.literal_eval(response_text)
+            if isinstance(filtered_courses, list):
+                logger.info(f"[CourseFilter] LLM filtered to {len(filtered_courses)} valid courses")
+                return filtered_courses
+        except:
+            pass
+        
+        # Fallback: extract items from response
+        lines = [line.strip() for line in response_text.split('\n') if line.strip()]
+        filtered_courses = []
+        for line in lines:
+            clean = line.strip('- "\'[]')
+            if clean and not re.match(r'^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$', clean):
+                filtered_courses.append(clean)
+        
+        logger.info(f"[CourseFilter] LLM filtered to {len(filtered_courses)} valid courses (fallback parsing)")
+        return filtered_courses
+        
+    except Exception as e:
+        logger.error(f"[CourseFilter] LLM filtering failed: {e}")
+        # Fallback: return candidates with basic filtering
+        return [c for c in candidates if len(c) > 8]
+
+
+# ============================================================================
 # ENHANCED AGENT PREFIX WITH DYNAMIC CONTEXT
 # ============================================================================
 
 AGENT_PREFIX_TEMPLATE = """
 You are an EXPERT data analyst working with student transcript data.
 
-================================================================================
-DATA CONTEXT (LIVE FROM CURRENT DATASET)
-================================================================================
+DATA: {total_rows} records | {total_students} students | {total_courses} courses | GPA range: {gpa_min:.2f}-{gpa_max:.2f}
 
-Dataset Size: {total_rows} enrollment records
-Unique Students: {total_students}
-Unique Courses: {total_courses}
+Sample Students: {sample_students_formatted}
+Sample Courses: {sample_courses_formatted}
+Terms: {available_terms_formatted}
+Columns: {columns_list}
 
-Sample Students in Data:
-{sample_students_formatted}
-
-Sample Courses in Data:
-{sample_courses_formatted}
-
-Available Terms:
-{available_terms_formatted}
-
-GPA Range: {gpa_min:.2f} - {gpa_max:.2f}
-
-Available Columns:
-{columns_list}
+STRUCTURE: Each row = ONE course enrollment. Students appear multiple times. Aggregate correctly.
 
 ================================================================================
-CRITICAL DATA STRUCTURE
+QUERY: "{original_query}"
+ANSWER ABOUT: {query_topic}
 ================================================================================
 
-- Each row = ONE COURSE ENROLLMENT
-- Students appear in MULTIPLE rows (one per course)
-- You MUST aggregate correctly to avoid double-counting
+TECHNIQUES:
 
-================================================================================
-YOUR PROBLEM-SOLVING APPROACH
-================================================================================
+FUZZY MATCH (always use):
+  df['Student Name'].str.contains('Leslie', case=False, na=False)
+  df['Course Title'].str.contains('Business.*Math', case=False, regex=True, na=False)
 
-STEP 1: Understand what is being asked
-STEP 2: Write ONE code statement to get the answer
-STEP 3: Execute it ONCE
-STEP 4: Format the result and respond immediately
+TERM FILTER:
+  df['Term'].str.contains('Fall', case=False, na=False) & df['Term'].str.contains('2024', na=False)
 
-================================================================================
-KEY TECHNIQUES
-================================================================================
-
-FUZZY MATCHING (always use .str.contains):
-  df[df['Student Name'].str.contains('Leslie', case=False, na=False)]
-  df[df['Student Name'].str.contains('Trista.*Barrett', case=False, regex=True, na=False)]
-  df[df['Course Title'].str.contains('Business.*Math', case=False, regex=True, na=False)]
-
-TERM FILTERING (flexible matching):
-  df[df['Term'].str.contains('Fall', case=False, na=False) & 
-     df['Term'].str.contains('2024', case=False, na=False)]
-
-GPA HANDLING (filter and aggregate):
-  Career GPA: df[df['GPA'] > 0]['GPA'].max()
+GPA (always filter > 0):
+  Career: df[df['GPA'] > 0]['GPA'].max()
   Average: df[df['GPA'] > 0].groupby('Student Name')['GPA'].max().mean()
 
-COUNTING:
-  Students: df['Student Name'].nunique()
-  Courses: df['Course Title'].dropna().nunique()
-
-RANKING:
+RANK:
   df[df['GPA'] > 0].groupby('Student Name')['GPA'].max().sort_values(ascending=False).head(5)
 
+COURSE QUERIES (check both columns):
+  courses_title = df[filter]['Course Title'].dropna().unique().tolist()
+  courses_number = df[filter]['Course Number'].dropna().unique().tolist() if 'Course Number' in df.columns else []
+  all_courses = list(set(courses_title + courses_number))
+
 ================================================================================
-EXAMPLES (5 KEY PATTERNS)
+EXAMPLES
 ================================================================================
 
 Q: "What is Trista Barrett's GPA?"
-Code:
-student_rows = df[df['Student Name'].str.contains('Trista.*Barrett', case=False, regex=True, na=False)]
-gpa_values = student_rows[student_rows['GPA'] > 0]['GPA']
-gpa_values.max() if len(gpa_values) > 0 else 0.0
+Code: df[df['Student Name'].str.contains('Trista.*Barrett', case=False, regex=True, na=False)][df['GPA'] > 0]['GPA'].max()
 
 Q: "What courses is Leslie enrolled in?"
 Code:
-courses = df[df['Student Name'].str.contains('Leslie', case=False, na=False)]['Course Title'].dropna().unique().tolist()
-student_name = df[df['Student Name'].str.contains('Leslie', case=False, na=False)]['Student Name'].iloc[0]
-f"{{student_name}} is enrolled in:\\n" + "\\n".join([f"- {{c}}" for c in courses])
+filter = df['Student Name'].str.contains('Leslie', case=False, na=False)
+list(set(df[filter]['Course Title'].dropna().unique().tolist() + df[filter].get('Course Number', pd.Series()).dropna().unique().tolist()))
 
 Q: "Top 5 students by GPA"
-Code:
-df[df['GPA'] > 0].groupby('Student Name')['GPA'].max().reset_index().sort_values('GPA', ascending=False).head(5)
-
-Q: "How many courses did Trista take in Fall 2024?"
-Code:
-student_filter = df['Student Name'].str.contains('Trista', case=False, na=False)
-term_filter = df['Term'].str.contains('Fall', case=False, na=False) & df['Term'].str.contains('2024', case=False, na=False)
-df[student_filter & term_filter]['Course Title'].dropna().nunique()
-
-Q: "Average GPA for Fall 2024?"
-Code:
-term_rows = df[df['Term'].str.contains('Fall', case=False, na=False) & df['Term'].str.contains('2024', case=False, na=False)]
-term_rows[term_rows['GPA'] > 0].groupby('Student Name')['GPA'].max().mean()
+Code: df[df['GPA'] > 0].groupby('Student Name')['GPA'].max().sort_values(ascending=False).head(5)
 
 ================================================================================
-QUERY HINTS (for this specific query):
+EXECUTION PROTOCOL (CRITICAL - DO NOT VIOLATE)
 ================================================================================
-{query_hints}
-
-================================================================================
-IMMEDIATE RESPONSE PROTOCOL (CRITICAL!)
-================================================================================
-
-After ONE successful code execution that returns valid data:
-
-1. Take the result exactly as returned
-2. Format it nicely if needed
-3. Return your final answer IMMEDIATELY
-4. Do NOT re-execute the code to verify
-
-Example:
-- Code executes: ['Biology', 'Math', 'English']
-- You see the result
-- Format: "Courses: Biology, Math, English"
-- RESPOND and STOP
-
-Do NOT:
-- Run the same code again
-- Try to verify the result
-- Second-guess the execution
-
-The python_repl_ast output IS the source of truth.
-If code returns data, that data is CORRECT and FINAL.
-
-================================================================================
-EXECUTION RULES
-================================================================================
-
-1. Write concise code (1-3 lines when possible)
-2. Execute ONCE
-3. Accept the first valid result
+1. Write ONE aggregated code statement that gets the full answer
+2. Execute EXACTLY ONCE
+3. Take result AS-IS
 4. Format and respond immediately
-5. STOP
+5. STOP - DO NOT make additional tool calls
 
-Only execute again if:
-- First attempt had a syntax error
-- Result was empty/null and you need to try a different approach
+VIOLATION EXAMPLES (NEVER DO THIS):
+❌ Checking each student individually in a loop
+❌ Re-running code to verify
+❌ Making multiple queries when one would work
 
-FORMAT GUIDELINES:
-- For lists: Use bullet points (\\n- item)
-- For single values: Include context ("GPA: 3.5")
-- For rankings: Number the items (1. Name - GPA)
-- For tables: Use DataFrame.to_markdown()
+CORRECT APPROACH:
+✅ Use groupby/sort/head to get answer in ONE execution
+✅ Trust the pandas result
+✅ Respond immediately
 
-================================================================================
-KEY REMINDERS
-================================================================================
+Example: "Highest GPA student"
+WRONG: Check each student (10 calls) ❌
+RIGHT: df.groupby('Student Name')['GPA'].max().idxmax() (1 call) ✅
+
+If query asks for GPA → Return ONLY GPA
+If query asks for courses → Return ONLY courses
+DO NOT mix topics.
+
+Query hints: {query_hints}
 
 ALWAYS:
-- Use fuzzy matching (.str.contains)
+- Use .str.contains (fuzzy matching)
 - Filter GPA > 0 before calculations
 - Use .dropna() for text columns
 - Group by student for aggregations
-- Accept first valid execution result
+- Accept first valid result
 
 NEVER:
-- Use exact string matching (==)
-- Average GPA column directly
-- Re-execute unnecessarily
-- Ignore valid execution results
+- Use exact matching (==)
+- Re-execute valid results
+- Add information not requested
 
-Now solve the query: Write ONE code statement, execute it ONCE, format result, respond.
+Now solve: Write code, execute ONCE, format, respond.
 """
 
 
@@ -329,7 +364,7 @@ def _create_llm():
 
 def answer(query: str, params: Dict[str, Any] = None) -> ToolResult:
     """
-    Universal CSV Agent for ALL transcript queries with dynamic context.
+    Universal CSV Agent for ALL transcript queries with dynamic context + smart filtering.
     """
     logger.info("="*80)
     logger.info(f"[TranscriptTool] QUERY: '{query}'")
@@ -363,7 +398,17 @@ def answer(query: str, params: Dict[str, Any] = None) -> ToolResult:
         
         logger.info(f"[TranscriptTool] Query hints: {preprocessed['hints']}")
         
-        # STEP 3: Build dynamic prompt with actual data context
+        # Determine query topic for focused prompt
+        query_lower = query.lower()
+        if 'gpa' in query_lower and 'course' not in query_lower:
+            query_topic = "GPA/grades ONLY"
+        elif 'course' in query_lower:
+            query_topic = "course enrollment ONLY"
+        elif any(kw in query_lower for kw in ['rank', 'top', 'highest', 'display', 'list']):
+            query_topic = "student rankings/lists ONLY"
+        else:
+            query_topic = "the specific question asked"
+
         agent_prefix = AGENT_PREFIX_TEMPLATE.format(
             total_rows=context['total_rows'],
             total_students=context['total_students'],
@@ -374,9 +419,11 @@ def answer(query: str, params: Dict[str, Any] = None) -> ToolResult:
             gpa_min=context['gpa_range']['min'],
             gpa_max=context['gpa_range']['max'],
             columns_list='\n'.join(f"  - {col}" for col in context['columns']),
-            query_hints='\n'.join(f"  - {hint}" for hint in preprocessed['hints']) if preprocessed['hints'] else "  - None"
+            query_hints='\n'.join(f"  - {hint}" for hint in preprocessed['hints']) if preprocessed['hints'] else "  - None",
+            original_query=query,  # NEW
+            query_topic=query_topic  # NEW
         )
-        
+
         # STEP 4: Create LLM
         llm = _create_llm()
         
@@ -390,8 +437,8 @@ def answer(query: str, params: Dict[str, Any] = None) -> ToolResult:
             verbose=True,
             agent_type="openai-tools",
             allow_dangerous_code=True,
-            max_iterations=5,  # Reduced to force faster stopping
-            early_stopping_method="force"  # Force stop after max iterations
+            max_iterations=5,
+            early_stopping_method="force"
         )
         
         logger.info(f"[TranscriptTool] Executing agent...")
@@ -400,6 +447,42 @@ def answer(query: str, params: Dict[str, Any] = None) -> ToolResult:
         result = agent.invoke({"input": query})
         
         answer_text = result.get("output", "Unable to process query")
+
+        # DEBUG: Check post-processing trigger conditions
+        logger.info(f"[POST-PROCESS CHECK] Original query: '{query}'")
+        logger.info(f"[POST-PROCESS CHECK] 'course' in query: {'course' in query.lower()}")
+        logger.info(f"[POST-PROCESS CHECK] 'enrolled' in query: {'enrolled' in query.lower()}")
+        logger.info(f"[POST-PROCESS CHECK] Answer preview: {answer_text[:200]}")
+        
+        # STEP 7: POST-PROCESSING - Smart course filtering if output looks suspicious
+        if 'course' in query.lower() and 'enrolled' in query.lower():
+            # Check if answer contains date patterns (indicates bad data)
+            if re.search(r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}', answer_text):
+                logger.warning("[TranscriptTool] Detected dates in course list - applying smart LLM filter")
+                
+                # Extract student name from query
+                name_match = re.search(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})', query)
+                student_name = name_match.group(1) if name_match else "Student"
+                
+                # Re-query with smart filtering
+                student_filter = df['Student Name'].str.contains(student_name.split()[0], case=False, na=False)
+                student_rows = df[student_filter]
+                
+                if len(student_rows) > 0:
+                    # Collect from both columns
+                    courses_title = student_rows['Course Title'].dropna().unique().tolist()
+                    courses_number = student_rows['Course Number'].dropna().unique().tolist() if 'Course Number' in df.columns else []
+                    raw_courses = list(set(courses_title + courses_number))
+                    
+                    # Apply LLM filter
+                    filtered_courses = _filter_courses_with_llm(raw_courses, student_name, llm)
+                    
+                    if filtered_courses:
+                        actual_student_name = student_rows['Student Name'].iloc[0]
+                        answer_text = f"{actual_student_name} is enrolled in:\n" + "\n".join([f"- {c}" for c in filtered_courses])
+                        logger.info(f"[TranscriptTool] Applied smart filter: {len(filtered_courses)} valid courses")
+                    else:
+                        answer_text = f"No valid course enrollment records found for {student_name}."
         
         logger.info(f"[TranscriptTool] Success")
         logger.info(f"[TranscriptTool] Answer: {answer_text[:200]}...")
