@@ -10,6 +10,38 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 # project root: D:\jericho
 PROJECT_ROOT = BACKEND_ROOT.parent
 
+def _compute_missing_gpas(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute GPA from Hours GPA and Quality Points when GPA is NaN.
+    
+    Handles cases where columns contain strings/mixed types.
+    """
+    if "GPA" not in df.columns:
+        return df
+    
+    if "Hours GPA" not in df.columns or "Quality Points" not in df.columns:
+        logger.debug("Cannot compute GPA: missing Hours GPA or Quality Points columns")
+        return df
+    
+    try:
+        # Convert columns to numeric, coercing errors to NaN
+        df["GPA"] = pd.to_numeric(df["GPA"], errors='coerce')
+        df["Hours GPA"] = pd.to_numeric(df["Hours GPA"], errors='coerce')
+        df["Quality Points"] = pd.to_numeric(df["Quality Points"], errors='coerce')
+        
+        # Find rows with missing GPA but valid hours
+        mask = df["GPA"].isna() & (df["Hours GPA"] > 0) & df["Quality Points"].notna()
+        count = mask.sum()
+        
+        if count > 0:
+            df.loc[mask, "GPA"] = df.loc[mask, "Quality Points"] / df.loc[mask, "Hours GPA"]
+            logger.info(f"Computed {count} missing GPAs from Hours GPA / Quality Points")
+        
+    except Exception as e:
+        logger.error(f"GPA computation failed: {e}")
+    
+    return df
+
 
 def get_transcript_df() -> pd.DataFrame:
     if "transcripts" in _cache:
@@ -23,6 +55,10 @@ def get_transcript_df() -> pd.DataFrame:
 
     logger.info(f"Loading merged transcripts from {path}")
     df = pd.read_csv(path)
+    
+    # NEW: Compute missing GPAs
+    df = _compute_missing_gpas(df)
+    
     _cache["transcripts"] = df
     return df
 

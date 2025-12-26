@@ -38,21 +38,75 @@ TOOL_MAP = {
 # =============================================================================
 
 LAYER1_PATTERNS = {
-    "TranscriptTool": {
-        "keywords": {
-            "student", "gpa", "grade", "transcript", "course",
-            "academic", "standing", "cumulative", "term",
-            "courses", "enrolled", "credits", "advisor", "major"
-        },
-        "phrases": {
-            "student gpa", "gpa for", "gpa of",
-            "student transcript", "transcript for",
-            "academic standing", "cumulative gpa", "term gpa",
-            "courses for", "courses taken", "student courses",
-            "student list", "list students", "list by gpa"
-        },
-        "confidence_threshold": 0.75
-    },
+"TranscriptTool": {
+    "phrases": [
+        # Count queries
+        "how many students",
+        "number of students",
+        "total students",
+        "student count",
+        
+        # Top/ranking queries
+        "top students",
+        "top student",
+        "highest gpa",
+        "lowest gpa",
+        "best students",
+        "rank students",
+        "students by gpa",
+        
+        # Course queries
+        "what courses",
+        "which courses",
+        "courses enrolled",
+        "student courses",
+        "enrolled in",
+        
+        # GPA queries
+        "what is the gpa",
+        "what is gpa",
+        "gpa for",
+        "gpa of",
+        "student gpa",
+        "career gpa",
+        
+        # Display/Show/List by metric
+        "display students by gpa",
+        "display student by gpa",
+        "show students by gpa",
+    ],
+    
+    "patterns": [  # ✅ CHANGED FROM "regex_patterns"
+        # Count patterns
+        r'how\s+many\s+students',
+        r'number\s+of\s+students',
+        
+        # Top N patterns
+        r'top\s+\d+\s*students',
+        r'(?:highest|lowest|best|worst)\s+(?:gpa|students)',
+        r'students.*?by.*?gpa',
+        
+        # Course patterns
+        r'what\s+courses.*?(?:enrolled|taking)',
+        r'courses.*?(?:for|of)\s+([A-Z][a-z]+)',
+        
+        # GPA patterns
+        r'(?:gpa|grade).*?(?:for|of)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+    ],
+    
+    "min_confidence": 0.75,
+    
+    "negative_patterns": [
+        r'payroll',
+        r'salary',
+        r'HR',
+        r'catalog',
+        r'policy',
+        r'handbook',
+        r'fee',
+        r'refund',
+    ]
+},
     "PayrollTool": {
         "phrases": {
             "pay period", "payroll period", "payroll number",
@@ -77,50 +131,159 @@ LAYER1_PATTERNS = {
     }
 }
 
+# ============================================================================
+# ENTITY DETECTION HELPERS (Add before layer1_route)
+# ============================================================================
+
+def _has_student_name(query: str) -> bool:
+    """
+    Detect if query contains a student name (capitalized multi-word pattern).
+    
+    Examples:
+        "What is the GPA of Leslie Nichole Bright?" → True
+        "What courses is Leslie enrolled in?" → True (first name + context)
+        "How many students enrolled?" → False
+    """
+    # Pattern 1: Full name (First Middle Last or First Last)
+    pattern_full = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b'
+    match = re.search(pattern_full, query)
+    
+    if match:
+        candidate = match.group(1)
+        # Filter out common false positives
+        false_positives = {
+            "Fall", "Spring", "Summer", "Winter",
+            "Board Of Regents", "Din College", "Newman University",
+            "Murray State", "Pay Period", "Payroll Calendar"
+        }
+        if candidate not in false_positives:
+            logger.debug(f"[Entity Detection] Found full name: '{candidate}'")
+            return True
+    
+    # Pattern 2: First name only with context keywords
+    # "What courses is Leslie enrolled in?"
+    # "Show me grades for John"
+    if re.search(r'\b([A-Z][a-z]{3,})\s+(?:enrolled|taking|courses|grades?|gpa|transcript)', query):
+        logger.debug(f"[Entity Detection] Found first name with context")
+        return True
+    
+    if re.search(r'(?:courses?|grades?|gpa|transcript).*?(?:for|of)\s+([A-Z][a-z]{3,})\b', query):
+        logger.debug(f"[Entity Detection] Found first name with context (reverse)")
+        return True
+    
+    return False
+
+def _has_payroll_period(query: str) -> bool:
+    """
+    Detect payroll period references.
+    
+    Examples:
+        "check date for pay period 3" --> True
+        "payroll p05" --> True
+    """
+    patterns = [
+        r'pay\s*period\s*\d+',
+        r'payroll\s*(?:period)?\s*\d+',
+        r'\bp\d{2}\b',
+        r'period\s*\d+.*check\s*date',
+    ]
+    return any(re.search(p, query.lower()) for p in patterns)
+
 def layer1_route(query: str) -> Tuple[Optional[str], float]:
     """
-    Layer 1: Fast rule-based routing (< 1ms)
+    Layer 1: Fast rule-based routing with ENTITY DETECTION (< 1ms)
     
-    Only returns HIGH confidence matches.
-    Falls through to Layer 2 for ambiguous queries.
+    Priority:
+    1. Entity detection (student names, payroll periods) - HIGHEST
+    2. Intent keywords (what is, explain, policy)
+    3. Domain keywords (existing patterns)
     """
     q_norm = query.lower()
     
+    # =========================================================================
+    # PRIORITY 1: ENTITY DETECTION (New - Solves enrollment ambiguity)
+    # =========================================================================
+    
+    if _has_student_name(query):
+        logger.info("[Layer 1] Entity detected: STUDENT NAME --> TranscriptTool (confidence=0.95)")
+        return ("TranscriptTool", 0.95)
+    
+    if _has_payroll_period(query):
+        logger.info("[Layer 1] Entity detected: PAYROLL PERIOD --> PayrollTool (confidence=0.95)")
+        return ("PayrollTool", 0.95)
+    
+    # =========================================================================
+    # PRIORITY 2: INTENT DETECTION (New - Policy vs Data queries)
+    # =========================================================================
+    
+    # Policy/informational intent
+    policy_keywords = ["what is", "explain", "policy", "procedure", "how to", "process for"]
+    if any(kw in q_norm for kw in policy_keywords):
+        # Exclude if also has data query markers
+        data_markers = ["how many", "list", "show", "display", "which students"]
+        if not any(dm in q_norm for dm in data_markers):
+            logger.info("[Layer 1] Intent detected: POLICY --> GenericRagTool (confidence=0.85)")
+            return ("GenericRagTool", 0.85)
+    
+    # =========================================================================
+    # PRIORITY 3: DOMAIN KEYWORD MATCHING (FIXED)
+    # =========================================================================
+    
     for tool, config in LAYER1_PATTERNS.items():
-        matches = 0
-        total_checks = 0
+        match_score = 0
+        total_possible = 0
         
-        # Check phrases (highest weight)
-        for phrase in config.get("phrases", set()):
-            total_checks += 1
-            if phrase in q_norm:
-                matches += 2
+        # 1. Check phrases
+        phrases = config.get("phrases", [])
+        if isinstance(phrases, set):
+            phrases = list(phrases)
         
-        # Check keywords (lower weight)
-        for keyword in config.get("keywords", set()):
-            total_checks += 1
-            if keyword in q_norm:
-                matches += 1
+        for phrase in phrases:
+            total_possible += 2  # Phrases worth 2 points
+            if phrase.lower() in q_norm:
+                match_score += 2
+                logger.debug(f"[Layer 1 {tool}] ✅ Phrase: '{phrase}'")
         
-        # Check regex patterns
-        for pattern in config.get("patterns", []):
-            total_checks += 1
-            if re.search(pattern, q_norm):
-                matches += 1
+        # 2. Check keywords
+        keywords = config.get("keywords", [])
+        if isinstance(keywords, set):
+            keywords = list(keywords)
         
-        if total_checks > 0:
-            confidence = matches / total_checks
-            threshold = config.get("confidence_threshold", 0.75)
+        for keyword in keywords:
+            total_possible += 1  # Keywords worth 1 point
+            if keyword.lower() in q_norm:
+                match_score += 1
+                logger.debug(f"[Layer 1 {tool}] ✅ Keyword: '{keyword}'")
+        
+        # 3. Check regex patterns
+        patterns = config.get("patterns", [])
+        for pattern in patterns:
+            total_possible += 2  # Patterns worth 2 points
+            try:
+                if re.search(pattern, q_norm, re.IGNORECASE):
+                    match_score += 2
+                    logger.debug(f"[Layer 1 {tool}] ✅ Pattern: {pattern}")
+            except Exception as e:
+                logger.error(f"[Layer 1 {tool}] Bad regex: {pattern} - {e}")
+        
+        # Calculate confidence
+        if total_possible > 0:
+            confidence = match_score / total_possible
+            threshold = config.get("min_confidence", config.get("confidence_threshold", 0.75))
+            
+            logger.debug(
+                f"[Layer 1 {tool}] Score: {match_score}/{total_possible} = "
+                f"{confidence:.2f} (need {threshold})"
+            )
             
             if confidence >= threshold:
                 logger.info(
-                    f"[Layer 1] {tool} (confidence={confidence:.2f})"
+                    f"[Layer 1] Match: {tool} (confidence={confidence:.2f})"
                 )
                 return (tool, confidence)
     
     logger.debug("[Layer 1] No high-confidence match. Falling to Layer 2")
     return (None, 0.0)
-
 
 # =============================================================================
 # LAYER 2: LLM WITH TOOL DESCRIPTIONS (100-200ms)
@@ -148,9 +311,9 @@ Example intent keywords:
 - Student information, enrollment status
 
 Do NOT use for:
-- Payroll/salary/payments → PayrollTool
-- Meeting schedules/calendars → BorPlannerTool
-- Policies/procedures/handbook → GenericRagTool
+- Payroll/salary/payments --> PayrollTool
+- Meeting schedules/calendars --> BorPlannerTool
+- Policies/procedures/handbook --> GenericRagTool
 """,
 
     "PayrollTool": """
@@ -171,9 +334,9 @@ Example intent keywords:
 - Payment date, payroll calendar, payment schedule
 
 Do NOT use for:
-- Student records → TranscriptTool
-- Meeting schedules → BorPlannerTool
-- Policies → GenericRagTool
+- Student records --> TranscriptTool
+- Meeting schedules --> BorPlannerTool
+- Policies --> GenericRagTool
 """,
 
     "BorPlannerTool": """
@@ -193,9 +356,9 @@ Example intent keywords:
 - Finance committee, governance, ACCT-NLS
 
 Do NOT use for:
-- Student records → TranscriptTool
-- Payroll → PayrollTool
-- Policies → GenericRagTool
+- Student records --> TranscriptTool
+- Payroll --> PayrollTool
+- Policies --> GenericRagTool
 """,
 
     "GenericRagTool": """
@@ -464,15 +627,46 @@ class Orchestrator:
                     if tool_plan.get("tools") else {}
                 )
                 
-                # Tool-specific parameter extraction
+                # Inside handle_query(), in the tool execution section
+                # REPLACE the TranscriptTool parameter extraction with:
+
                 if tool_name == "TranscriptTool":
-                    q_lower = request.query.lower()
-                    if " of " in q_lower:
-                        parts = request.query.split(" of ")
-                        name = parts[-1].strip(" .?")
-                        if name:
-                            params["student_name"] = name
-                
+                    # Extract student name using multiple patterns + case-insensitive
+                    student_name = None
+                    
+                    # Pattern 1: "courses/grades/gpa for/of/is [Name]" (BEST - specific)
+                    match = re.search(
+                        r'(?:courses|grades?|gpa|transcript).*?(?:for|of|is)\s+([A-Z][a-z]{3,}(?:\s+[A-Z][a-z]+)*)\b',
+                        request.query
+                    )
+                    if match:
+                        student_name = match.group(1).strip()
+                        logger.info(f"[Orchestrator] Pattern 1 matched: '{student_name}'")
+                    
+                    # Pattern 2: "of/for [Full Name]"
+                    if not student_name:
+                        match = re.search(
+                            r'(?:of|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})',
+                            request.query
+                        )
+                        if match:
+                            student_name = match.group(1).strip()
+                            logger.info(f"[Orchestrator] Pattern 2 matched: '{student_name}'")
+                    
+                    # Pattern 3: "which/student [Name] has/is/was/enrolled"
+                    if not student_name:
+                        match = re.search(
+                            r'(?:which|student)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\s+(?:has|is|was|enrolled)',
+                            request.query
+                        )
+                        if match:
+                            student_name = match.group(1).strip()
+                            logger.info(f"[Orchestrator] Pattern 3 matched: '{student_name}'")
+                    
+                    if student_name:
+                        params["student_name"] = student_name
+                        logger.info(f"[Orchestrator] Final extracted student_name: '{student_name}'")
+
                 if tool_name == "PayrollTool":
                     q_lower = request.query.lower()
                     m_year = re.search(r"\b(20[0-9]{2})\b", q_lower)
@@ -517,7 +711,7 @@ class Orchestrator:
                 sources=[],
             )
 
-        final_answer = "\n\n".join([tr.explanation for tr in tool_results])
+        final_answer = final_answer = "\n\n".join([tr.explanation if hasattr(tr, 'explanation') else tr.get('explanation', '') for tr in tool_results])
         avg_conf = sum(t.confidence for t in tool_results) / len(tool_results)
 
         # NEW: merge sources from all tools

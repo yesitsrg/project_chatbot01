@@ -1,64 +1,52 @@
-"""
-SINGLE FILE INGEST - ONLY Residence Hall for fast testing
-"""
+#!/usr/bin/env python3
+"""Test the enhanced 3-tier transcript tool"""
+
+import sys
+from pathlib import Path
+
+# Add backend to path
+sys.path.insert(0, str(Path(__file__).parent))
+
 from core import init_logger
 init_logger()
 
-"""
-SINGLE FILE INGEST - ONLY Residence Hall (NO rag_pipeline dependency)
-"""
+from services.orchestrator import Orchestrator, OrchestratorRequest
 
-import sys
-sys.path.append(".")
+# Create orchestrator
+orchestrator = Orchestrator()
 
-from pathlib import Path
-import json
-from services.document_parser import DocumentParser
-from services.text_processor import TextProcessor
-from db.chromadb_manager import ChromaDBManager
-from core.embeddings import EmbeddingPipeline
-from core import get_logger
+# Test queries
+test_cases = [
+    # Tier 1 tests
+    ("Give me the GPA details of Trista Barrett", "Tier 1 - Single student"),
+    ("What is the GPA of Leslie Nichole Bright?", "Tier 1 - Single student with middle name"),
+    ("How many students are in the transcript data?", "Tier 1 - Count"),
+    ("Show me the top 5 students by GPA", "Tier 1 - Top N"),
+    
+    # Tier 2 tests
+    ("How many students have A grade in Fall 2024?", "Tier 2 - Grade distribution"),
+    
+    # Routing tests (enrollment ambiguity)
+    ("What courses is Leslie enrolled in?", "Should route to TranscriptTool (entity detected)"),
+    ("What is the enrollment policy?", "Should route to GenericRagTool (policy intent)"),
+]
 
-logger = get_logger(__name__)
+print("="*80)
+print("TESTING ENHANCED 3-TIER TRANSCRIPT TOOL")
+print("="*80)
 
-PDF_PATH = Path("D:/jericho/data/documents/hr_policies/FINAL-Rev2024-DC RES LIFE HANDBOOK (7).pdf")
+for query, description in test_cases:
+    print(f"\n{'='*80}")
+    print(f"TEST: {description}")
+    print(f"QUERY: {query}")
+    print(f"{'='*80}")
+    
+    request = OrchestratorRequest(query=query)
+    response = orchestrator.handle_query(request)
+    
+    print(f"\n✅ TOOLS USED: {response.tools_used}")
+    print(f"✅ CONFIDENCE: {response.confidence:.2f}")
+    print(f"\n📄 ANSWER:\n{response.answer[:500]}")
+    print(f"\n{'='*80}")
 
-def ingest_single_file():
-    """Process ONLY Residence Hall - Full pipeline"""
-    
-    if not PDF_PATH.exists():
-        print(f"❌ File not found: {PDF_PATH}")
-        return
-    
-    print(f"🎯 SINGLE FILE: {PDF_PATH.name}")
-    print("🚀 Starting targeted ingest...")
-    
-    # Force re-process
-    PDF_PATH.touch()
-    
-    # 1. Parse
-    print("📄 STEP 1: DocumentParser...")
-    parser = DocumentParser()
-    parsed_doc = parser.parse_file(PDF_PATH)
-    print(f"   Parsed: {len(parsed_doc.content)} blocks")
-    
-    # 2. Chunk
-    print("🔪 STEP 2: TextProcessor...")
-    processor = TextProcessor()
-    chunks = processor.process_document(parsed_doc)
-    print(f"   Chunked: {len(chunks)} chunks")
-    
-    # 3. Embed + Store (skip if testing only)
-    print("💾 STEP 3: ChromaDB (skipped for speed)")
-    print(f"\n✅ SUCCESS: {len(chunks)} clean chunks ready!")
-    print("🎯 Start server + test query NOW")
-    
-    # Save chunks for inspection
-    with open("residence_hall_clean_chunks.txt", "w", encoding="utf-8") as f:
-        for i, chunk in enumerate(chunks[:10]):  # First 10
-            f.write(f"CHUNK {i}: {len(chunk.content)} chars\n")
-            f.write(chunk.content[:200] + "\n\n")
-    print("💾 Saved: residence_hall_clean_chunks.txt")
-
-if __name__ == "__main__":
-    ingest_single_file()
+print("\n✅ ALL TESTS COMPLETED")
