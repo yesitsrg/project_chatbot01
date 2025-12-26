@@ -158,32 +158,39 @@ class RAGPipeline:
         raise Exception("Both Ollama endpoints failed")
 
     def _generate_answer(self, context: str, question: str) -> str:
-        """Enhanced prompting for accuracy."""
-        prompt = f"""You are an assistant answering questions strictly based on the provided context.
+        """Generate a concise, professional answer grounded strictly in context."""
+        prompt = f"""You are a professional assistant answering questions strictly from the provided context.
 
-    CONTEXT:
-    {context}
+CONTEXT:
+{context}
 
-    QUESTION:
-    {question}
+QUESTION:
+{question}
 
-    INSTRUCTIONS:
-    - Answer using ONLY the context above.
-    - For dates, numbers, and tables: quote EXACT values from the context.
-    - If the context truly does not contain enough information to answer, respond with:
-    "The documents do not contain information about this question."
-    - Do NOT invent facts or guess beyond the context.
-    """
+GUIDELINES:
+- Answer directly and professionally.
+- Do NOT start with phrases like "According to the context", "Based on the context", or similar.
+- Use only information from the context above.
+- For dates, numbers, and tables: quote exact values from the context.
+- If the context does not contain the answer, respond exactly with:
+  "The documents do not contain information about this question."
+- Do not invent or guess any information.
 
-        # Multi-provider with temp=0.1 for facts
+ANSWER:
+"""
+
+        # Multi-provider with temp=0.1 for factual answers
         providers = []
         if self.settings.llm_provider == "groq" and self.settings.groq_api_key:
             providers.append(self._call_groq)
         elif self.settings.llm_provider == "ollama":
             providers.append(self._call_ollama)
 
+        # Optional extra Groq fallback via env
         if os.getenv("GROQ_API_KEY"):
             providers.append(self._call_groq)
+
+        # Always consider local Ollama as an additional fallback
         providers.append(self._call_ollama)
 
         for provider in providers:
@@ -191,8 +198,9 @@ class RAGPipeline:
                 return provider(prompt).strip()
             except Exception as e:
                 logger.warning(f"{provider.__name__} failed: {e}")
-        return "LLM unavailable"
 
+        return "LLM unavailable"
+    
     def ingest_documents(self, doc_paths: List[str]) -> Dict[str, int]:
         """Enhanced ingest with full metadata."""
         stats = {"processed": 0, "failed": 0}
