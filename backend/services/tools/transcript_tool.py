@@ -282,15 +282,23 @@ CORE TECHNIQUES:
    Why: .* wildcard matches any middle name.
 
 2. COURSE DATA - CHECK BOTH COLUMNS AND FILTER JUNK (CRITICAL):
-
-   Step 1: Get data from BOTH columns (courses can be in either):
+   
+   Use NEWLINES between statements (not semicolons):
+   
    student_data = df[df['Student Name'].str.contains('Joshua.*Gaitan', case=False, regex=True, na=False)]
-   courses_title = student_data['Course Title'].dropna().unique().tolist()
-   courses_number = student_data['Course Number'].dropna().unique().tolist() if 'Course Number' in df.columns else []
-   all_courses = courses_title + courses_number
-
-   Step 2: INTELLIGENT FILTERING - Remove junk:
-   valid_courses = [c for c in all_courses if c and len(str(c).strip()) > 5 and not any(x in str(c) for x in ['Total', '/', '-', ':']) and not str(c).replace('-','').replace('/','').isdigit()]
+   courses = student_data['Course Title'].dropna().unique().tolist()
+   
+   clean_courses = []
+   for c in courses:
+       if len(str(c).strip()) > 5 and 'Total' not in str(c):
+           clean_courses.append(str(c).strip())
+   
+   student_name = student_data['Student Name'].iloc[0]
+   print(f"**{{student_name}}** is enrolled in:")
+   for c in clean_courses:
+       print(f"- {{c}}")
+   
+   CRITICAL: Each statement on new line. NO semicolons.
 
 3. GPA CALCULATIONS (filter > 0):
    df[df['Student Name'].str.contains('Trista.*Barrett', case=False, regex=True, na=False) & (df['GPA'] > 0)]['GPA'].max()
@@ -507,14 +515,23 @@ def answer(query: str, params: Dict[str, Any] = None) -> ToolResult:
         logger.info(f"[TranscriptTool] Executing agent with max 3 iterations...")
 
         # STEP 6: Execute with explicit stop instruction
-        enhanced_query = f"{query}\n\nIMPORTANT: Execute your code ONCE, format the output with Markdown, provide Final Answer, and STOP. Do not repeat."
+        enhanced_query = f"""{query}
+
+            IMPORTANT: 
+            - Write Python code with NEWLINES (not semicolons)
+            - Execute ONCE
+            - Format output with Markdown
+            - STOP after first execution"""
 
         result = agent.invoke({"input": enhanced_query})
 
         answer_text = result.get("output", "Unable to process query")
         # PHASE 4.1: Strip "Final Answer:" prefix if present
-        if answer_text.startswith("Final Answer:"):
-            answer_text = answer_text.replace("Final Answer:", "", 1).strip()
+        # Strip "Final Answer:" prefix (appears in agent output)
+        if "Final Answer:" in answer_text:
+            # Split on "Final Answer:" and take the last part (the actual answer)
+            parts = answer_text.split("Final Answer:")
+            answer_text = parts[-1].strip()
 
         logger.info(f"[TranscriptTool] Agent output: {answer_text[:300]}")
 
