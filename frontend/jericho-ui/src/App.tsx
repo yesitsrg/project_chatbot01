@@ -1,6 +1,8 @@
 // frontend/jericho-ui/src/App.tsx
 import React, { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 
 type Screen = 'login' | 'chat'
 
@@ -802,17 +804,19 @@ function App() {
                       }`}
                     >
                       <div
-                        className={`max-w-2xl rounded-xl px-5 py-4 text-sm shadow-md ${
+                        className={`max-w-4xl rounded-xl px-5 py-4 text-sm shadow-md ${
                           m.role === 'user'
                             ? 'bg-gradient-to-r from-amber-500 to-amber-400 text-slate-900 font-medium'
                             : 'bg-white text-slate-800 border border-slate-200'
                         }`}
                       >
-                        {/* MESSAGE CONTENT - MODIFIED FOR MARKDOWN */}
+                        {/* MESSAGE CONTENT - ENHANCED WITH TABLE SUPPORT */}
                         {m.role === 'user' ? (
                           m.content
                         ) : (
                           <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            rehypePlugins={[rehypeRaw]}
                             components={{
                               h3: ({ node, ...props }) => (
                                 <h3
@@ -821,22 +825,28 @@ function App() {
                                 />
                               ),
                               p: ({ node, ...props }) => (
-                                <p className="mb-2" {...props} />
+                                <p
+                                  className="mb-3 leading-relaxed"
+                                  {...props}
+                                />
                               ),
                               ul: ({ node, ...props }) => (
                                 <ul
-                                  className="list-disc ml-5 mb-2 space-y-1"
+                                  className="list-disc ml-5 mb-3 space-y-1"
                                   {...props}
                                 />
                               ),
                               ol: ({ node, ...props }) => (
                                 <ol
-                                  className="list-decimal ml-5 mb-2 space-y-1"
+                                  className="list-decimal ml-5 mb-3 space-y-1"
                                   {...props}
                                 />
                               ),
                               li: ({ node, ...props }) => (
-                                <li className="text-sm" {...props} />
+                                <li
+                                  className="text-sm leading-relaxed"
+                                  {...props}
+                                />
                               ),
                               strong: ({ node, ...props }) => (
                                 <strong
@@ -844,32 +854,61 @@ function App() {
                                   {...props}
                                 />
                               ),
+                              code: ({ node, inline, ...props }: any) =>
+                                inline ? (
+                                  <code
+                                    className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono text-red-600"
+                                    {...props}
+                                  />
+                                ) : (
+                                  <code
+                                    className="block bg-slate-900 text-emerald-100 p-3 rounded-lg text-xs font-mono overflow-x-auto my-3"
+                                    {...props}
+                                  />
+                                ),
+                              blockquote: ({ node, ...props }) => (
+                                <blockquote
+                                  className="border-l-4 border-amber-400 pl-4 italic text-slate-600 my-3"
+                                  {...props}
+                                />
+                              ),
+
+                              // ====== ENHANCED TABLE COMPONENTS ======
                               table: ({ node, ...props }) => (
-                                <div className="overflow-x-auto my-3">
+                                <div className="overflow-x-auto my-4 rounded-lg border border-slate-300 shadow-sm">
                                   <table
-                                    className="min-w-full border border-slate-300 text-sm"
+                                    className="min-w-full border-collapse text-xs"
                                     {...props}
                                   />
                                 </div>
                               ),
                               thead: ({ node, ...props }) => (
-                                <thead className="bg-slate-100" {...props} />
+                                <thead
+                                  className="bg-gradient-to-r from-slate-100 to-slate-50 sticky top-0"
+                                  {...props}
+                                />
+                              ),
+                              tbody: ({ node, ...props }) => (
+                                <tbody
+                                  className="bg-white divide-y divide-slate-200"
+                                  {...props}
+                                />
+                              ),
+                              tr: ({ node, ...props }) => (
+                                <tr
+                                  className="hover:bg-amber-50 transition-colors"
+                                  {...props}
+                                />
                               ),
                               th: ({ node, ...props }) => (
                                 <th
-                                  className="border border-slate-300 px-3 py-2 text-left font-semibold"
+                                  className="border-b-2 border-slate-300 px-4 py-2.5 text-left text-xs font-bold text-slate-800 uppercase tracking-wide"
                                   {...props}
                                 />
                               ),
                               td: ({ node, ...props }) => (
                                 <td
-                                  className="border border-slate-300 px-3 py-2"
-                                  {...props}
-                                />
-                              ),
-                              blockquote: ({ node, ...props }) => (
-                                <blockquote
-                                  className="border-l-4 border-amber-400 pl-4 italic text-slate-600 my-2"
+                                  className="border-b border-slate-200 px-4 py-2.5 text-slate-700 whitespace-nowrap"
                                   {...props}
                                 />
                               ),
