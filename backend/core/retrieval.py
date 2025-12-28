@@ -83,9 +83,16 @@ class HybridRetriever:
         """
         
         # Stage 1: Over-fetch for better final quality
+        chroma_filters = None
+        if filters:
+            # Remove None values and empty entries
+            cleaned = {k: v for k, v in filters.items() if v is not None and v != ""}
+            if cleaned:  # Only use if non-empty after cleaning
+                chroma_filters = cleaned        
+        
         fetch_k = max(36, top_k * 3)  # Get 30-90 candidates
         
-        vector_results = self._vector_search(query, fetch_k, filters)
+        vector_results = self._vector_search(query, fetch_k, chroma_filters)
         bm25_results = self._bm25_search(query, fetch_k) if self.bm25_index else []
         
         logger.info(
@@ -117,7 +124,7 @@ class HybridRetriever:
         filters: Optional[Dict[str, Any]]
     ) -> List[RetrievalResult]:
         """Vector similarity search using ChromaDB embeddings."""
-        results = self.db.query(query, top_k=top_k, filters=filters or {})
+        results = self.db.query(query, top_k=top_k, filters=filters)
         return [
             RetrievalResult(
                 r["content"], 

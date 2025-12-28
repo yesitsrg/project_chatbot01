@@ -48,6 +48,8 @@ def answer(question: str, params: Dict[str, Any] = None) -> ToolResult:
 
     params = params or {}
     filters = params.get("filters")
+    if filters is not None and len(filters) == 0:
+        filters = None  # Convert empty dict to None
 
     logger.info(f"[GenericRagTool] question='{question}' filters={filters}")
 
