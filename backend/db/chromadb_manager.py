@@ -101,18 +101,29 @@ class ChromaDBManager:
     ) -> List[Dict[str, Any]]:
         """
         Semantic query with metadata filtering.
+        
+        ChromaDB 0.5.17+ rejects empty where clause {} - omit parameter entirely if no filters.
 
         Args:
             query: Search query text.
             top_k: Number of results.
-            filters: Metadata filters e.g. {"domain": "hr"}.
+            filters: Metadata filters e.g. {"domain": "hr"} or None.
+        
+        Returns:
+            List of {content, metadata, distance} dicts.
         """
-        results = self.collection.query(
-            query_texts=[query],          # uses built-in text→embedding
-            n_results=top_k,
-            where=filters or {},
-            include=["documents", "metadatas", "distances"],
-        )
+        # Build query params dynamically
+        query_params = {
+            "query_texts": [query],
+            "n_results": top_k,
+            "include": ["documents", "metadatas", "distances"]
+        }
+        
+        # Only add 'where' if we have filters
+        if filters and len(filters) > 0:
+            query_params["where"] = filters
+        
+        results = self.collection.query(**query_params)
 
         formatted: List[Dict[str, Any]] = []
         docs = results.get("documents", [[]])[0]

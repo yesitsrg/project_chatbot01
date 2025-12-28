@@ -49,7 +49,7 @@ function App() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
 
   // ========== UX ENHANCEMENTS STATE ==========
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [recognition, setRecognition] = useState<any>(null)
@@ -169,6 +169,12 @@ function App() {
       setLoginError('Username and password are required.')
       return
     }
+
+    // Prevent multiple simultaneous login attempts
+    if (loginLoading) {
+      return
+    }
+
     setLoginLoading(true)
     try {
       const resp = await fetch('http://localhost:8000/apiv1/react-login', {
@@ -177,16 +183,23 @@ function App() {
         body: JSON.stringify({ username, password }),
         credentials: 'include',
       })
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`)
-      }
+
       const data = await resp.json()
-      setRole(data.role)
-      setScreen('chat')
+
+      if (!resp.ok) {
+        throw new Error(data.message || `HTTP ${resp.status}`)
+      }
+
+      if (data.role) {
+        setRole(data.role)
+        setLoginLoading(false)
+        setScreen('chat')
+      } else {
+        throw new Error('Invalid response from server')
+      }
     } catch (err) {
       console.error(err)
       setLoginError('Invalid username or password.')
-    } finally {
       setLoginLoading(false)
     }
   }
@@ -211,15 +224,12 @@ function App() {
       }))
       setSessions(list)
 
-      if (list.length > 0) {
-        const last = list[list.length - 1]
-        setCurrentSessionId(last.session_id)
-        await loadHistory(last.session_id)
-      } else {
-        await handleNewChat()
-      }
+      // Always create a new chat session on login
+      handleNewChat()
     } catch (err) {
-      console.error(err)
+      console.error('Error loading sessions:', err)
+      // Even if loading sessions fails, try to create a new chat
+      handleNewChat()
     } finally {
       setSessionsLoading(false)
     }
@@ -276,6 +286,10 @@ function App() {
 
       if (!sessionId) {
         console.error('[handleNewChat] No sessionId returned!', data)
+        // Set a temporary session ID to prevent blank page
+        setCurrentSessionId(1)
+        setMessages([])
+        setNextId(1)
         return
       }
 
@@ -289,6 +303,10 @@ function App() {
       setNextId(1)
     } catch (err) {
       console.error('[handleNewChat] Error:', err)
+      // Set a fallback session ID to prevent blank page
+      setCurrentSessionId(1)
+      setMessages([])
+      setNextId(1)
     }
   }
 
@@ -555,6 +573,8 @@ function App() {
     setSessions([])
     setCurrentSessionId(null)
     setMessages([])
+    setLoginLoading(false)
+    setLoginError(null)
     setScreen('login')
   }
 
@@ -565,14 +585,14 @@ function App() {
         <div className="absolute top-6 left-6 flex items-center gap-3">
           <img
             src="https://www.dinecollege.edu/wp-content/uploads/2024/12/dc_logoFooter.png"
-            alt="Diné College"
+            alt="Dine College Assistant"
             className="h-10 rounded-md object-contain"
           />
         </div>
 
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl p-8 w-full max-w-md text-white">
           <div className="mb-6">
-            <h1 className="text-3xl font-bold mb-1">Diné College</h1>
+            <h1 className="text-3xl font-bold mb-1">Dine College Assistant</h1>
             <p className="text-sm text-amber-300 font-semibold">
               Powered by Jericho
             </p>
@@ -620,22 +640,25 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100">
       {/* HEADER */}
-      <header className="h-16 px-6 flex items-center justify-between bg-white border-b border-slate-200 shadow-sm">
+      <header className="sticky top-0 z-50 h-16 px-6 flex items-center justify-between bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-4">
           <button
-            className="p-2 hover:bg-slate-100 rounded-lg transition lg:hidden"
+            className="p-2 hover:bg-slate-100 rounded-lg transition"
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            title="Toggle sidebar"
           >
             <span className="text-2xl">≡</span>
           </button>
           <div className="flex items-center gap-3">
             <img
               src="https://www.dinecollege.edu/wp-content/uploads/2024/12/dc_logoFooter.png"
-              alt="Diné College"
+              alt="Dine College Assistant"
               className="h-8 rounded-md object-contain"
             />
             <div>
-              <h1 className="font-bold text-slate-900">Diné College</h1>
+              <h1 className="font-bold text-slate-900">
+                Dine College Assistant
+              </h1>
               <p className="text-xs text-amber-600 font-semibold">
                 Powered by Jericho
               </p>
@@ -662,9 +685,17 @@ function App() {
       </header>
 
       <main className="flex-1 flex overflow-hidden">
+        {/* Overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/30 z-30"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* SIDEBAR */}
         <aside
-          className={`fixed lg:relative w-64 h-[calc(100vh-4rem)] bg-white border-r border-slate-200 p-4 flex flex-col overflow-y-auto z-40 transition-transform lg:translate-x-0 ${
+          className={`fixed w-64 h-[calc(100vh-4rem)] bg-white border-r border-slate-200 shadow-xl p-4 flex flex-col overflow-y-auto z-40 transition-transform ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -752,12 +783,12 @@ function App() {
           {adminView === 'chat' || role !== 'admin' ? (
             <>
               {/* CHAT MESSAGES */}
-              <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-slate-50 to-slate-100">
+              <div className="flex-1 overflow-y-auto p-6 pb-32 bg-gradient-to-b from-slate-50 to-slate-100">
                 <div className="max-w-3xl mx-auto space-y-4">
                   {messages.length === 0 && !showTemplates && (
                     <div className="text-center py-12">
                       <p className="text-slate-500 mb-4">
-                        Start a conversation about Diné College
+                        Start a conversation about Dine College
                       </p>
                       <button
                         className="text-amber-600 hover:text-amber-700 text-sm font-semibold"
@@ -1000,37 +1031,9 @@ function App() {
                 </div>
               </div>
 
-              {/* INPUT AREA */}
-              <div className="border-t border-slate-200 bg-white p-4 shadow-lg">
+              {/* INPUT AREA - FIXED AT BOTTOM */}
+              <div className="fixed bottom-0 left-0 right-0 border-t border-slate-200 bg-white p-4 shadow-lg z-40">
                 <div className="max-w-3xl mx-auto flex items-end gap-3">
-                  {/* UPLOAD BUTTON */}
-                  <button
-                    className="p-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition disabled:opacity-50"
-                    onClick={() => {
-                      setShowUpload(true)
-                      setUploadFiles(null)
-                      setUploadStatus(null)
-                    }}
-                    disabled={!currentSessionId}
-                    title="Upload documents"
-                  >
-                    📎
-                  </button>
-
-                  {/* VOICE BUTTON */}
-                  <button
-                    className={`p-3 rounded-lg transition disabled:opacity-50 ${
-                      isListening
-                        ? 'bg-red-500 text-white'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                    }`}
-                    onClick={toggleVoice}
-                    disabled={!currentSessionId}
-                    title={isListening ? 'Stop listening' : 'Start voice input'}
-                  >
-                    🎤
-                  </button>
-
                   {/* TEXT INPUT */}
                   <textarea
                     className="flex-1 rounded-lg border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent resize-none"
@@ -1050,6 +1053,60 @@ function App() {
                     }}
                     disabled={!currentSessionId}
                   />
+
+                  {/* UPLOAD BUTTON */}
+                  <button
+                    className="p-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition disabled:opacity-50"
+                    onClick={() => {
+                      setShowUpload(true)
+                      setUploadFiles(null)
+                      setUploadStatus(null)
+                    }}
+                    disabled={!currentSessionId}
+                    title="Upload documents"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  </button>
+
+                  {/* VOICE BUTTON */}
+                  <button
+                    className={`p-3 rounded-lg transition disabled:opacity-50 ${
+                      isListening
+                        ? 'bg-red-500 text-white'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                    }`}
+                    onClick={toggleVoice}
+                    disabled={!currentSessionId}
+                    title={isListening ? 'Stop listening' : 'Start voice input'}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" x2="12" y1="19" y2="22" />
+                    </svg>
+                  </button>
 
                   {/* SEND BUTTON */}
                   <button
